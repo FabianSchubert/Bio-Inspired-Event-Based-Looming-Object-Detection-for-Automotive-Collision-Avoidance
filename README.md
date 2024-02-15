@@ -1,2 +1,2 @@
 # lgmd-automotive
-Simulate the LGMD looming circuit using GeNN.
+Looming detection using a GeNN implementation of the LGMD circuit + event-based object classification.

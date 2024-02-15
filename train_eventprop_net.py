@@ -1,0 +1,49 @@
+from src.default_settings import params as def_params
+from src.classifier.network import generate_full_conn_network
+from src.classifier.data_io import load_file
+from src.classifier.train import train_network
+
+from ml_genn.optimisers import Adam
+
+from pygenn.genn_wrapper.CUDABackend import DeviceSelect_MANUAL
+
+data_train = load_file("./data/balanced_pruned/train_a_td.npy")
+data_val = load_file("./data/balanced_pruned/val_a_td.npy")
+
+INPUT_WIDTH = int(def_params["INPUT_WIDTH"] / def_params["N_SUBDIV_X"])
+INPUT_HEIGHT = int(def_params["INPUT_HEIGHT"] / def_params["N_SUBDIV_Y"])
+
+N_IN = INPUT_WIDTH * INPUT_HEIGHT
+N_HIDDEN = 1024
+N_OUT = 3
+
+N_EPOCHS = 100
+
+SENSOR_SIZE = (INPUT_WIDTH, INPUT_HEIGHT, 2)
+
+GPU_ID = None
+
+GENN_KWARGS = {"selectGPUByDeviceID": True}
+if GPU_ID is not None:
+    GENN_KWARGS["deviceSelectMethod"] = DeviceSelect_MANUAL
+    GENN_KWARGS["manualDeviceID"] = GPU_ID
+
+COMPILER_ARGS = {
+    "losses": "sparse_categorical_crossentropy",
+    "reg_lambda_upper": 4e-9,
+    "reg_lambda_lower": 4e-9,
+    "reg_nu_upper": 5,
+    "max_spikes": 1500,
+    "optimiser": Adam(0.0005),
+    "batch_size": 32,
+    "kernel_profiling": True,
+        **GENN_KWARGS,
+}
+
+net = generate_full_conn_network(N_IN, N_HIDDEN, N_OUT, recurrent=True)
+
+train_network(net, data_train, data_val, SENSOR_SIZE, N_EPOCHS, **COMPILER_ARGS)
+
+__import__("ipdb").set_trace()
+
+
