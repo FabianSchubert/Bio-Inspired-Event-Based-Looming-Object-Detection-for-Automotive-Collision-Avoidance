@@ -24,7 +24,6 @@ def gen_evt_hist(evts: np.ndarray, t: float, dt: float, w: int, h: int) -> np.nd
 def plot_event_slice(
     evts: np.ndarray, t: float, dt: float, w: int, h: int, ax: Union[None, Axes] = None
 ) -> AxesImage:
-
     img = gen_evt_hist(evts, t, dt, w, h)
 
     if not ax:
@@ -60,6 +59,40 @@ def play_event_anim(
 
     ani = FuncAnimation(
         fig, update, frames=t_frames, init_func=init, blit=True, interval=dt
+    )
+
+    plt.show()
+
+
+def play_var_anim(var: np.ndarray, t_start: float, t_end: float, dt_rec: float, dt_play: float, vmin: float, vmax: float) -> None:
+    fig, ax = plt.subplots()
+
+    t_run = t_end - t_start
+
+    n_frames = int(t_run / dt_play)
+
+    t_frames = t_start + np.arange(n_frames) * dt_play
+
+    ind_frames = (t_frames/dt_rec).astype("int")
+
+    aximg = ax.imshow(var[0], vmin=vmin, vmax=vmax)
+
+    def init():
+        return aximg,
+
+    def update(frame):
+        
+        new_img = np.zeros(var.shape[1:])
+
+        if frame < var.shape[0]:
+            new_img[:] = var[frame]
+
+        aximg.set_data(new_img)
+
+        return (aximg,)
+
+    ani = FuncAnimation(
+        fig, update, frames=ind_frames, init_func=init, blit=True, interval=dt_play
     )
 
     plt.show()

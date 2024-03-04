@@ -1,3 +1,6 @@
+# ignore these annyoing blender cache files
+*.blend1
+
 eventprop_net_checkpoints/
 eventprop_net_results.txt
 optim_log.txt

@@ -7,11 +7,11 @@ from typing import Union
 from config import EVENTS_DTYPE
 
 p = {
-    "CONTRAST_THRESH_POS": 0.8,
-    "CONTRAST_THRESH_NEG": 0.8,
-    "REFRACTORY_PERIOD": 0.0,
-    "LOG_EPS": 1e-3,
-    "USE_LOG": True,
+    "contrast_threshold_pos": 0.8,
+    "contrast_threshold_neg": 0.8,
+    "refractory_period": 0.0,
+    "log_eps": 1e-3,
+    "use_log_img": True,
 }
 
 
@@ -25,17 +25,7 @@ def vid2e(
         event_path = os.path.join(scene_path, "events.npy")
 
     # constructor
-    esim = esim_py.EventSimulator(
-        esim_params["CONTRAST_THRESH_POS"],  # contrast thesholds for positive
-        esim_params["CONTRAST_THRESH_NEG"],  # and negative events
-        esim_params[
-            "REFRACTORY_PERIOD"
-        ],  # minimum waiting period (in sec) before a pixel can trigger a new event
-        esim_params[
-            "LOG_EPS"
-        ],  # epsilon that is used to numerical stability within the logarithm
-        esim_params["USE_LOG"],  # wether or not to use log intensity
-    )
+    esim = esim_py.EventSimulator(*esim_params.values())
 
     events_from_images = esim.generateFromFolder(
         frame_path, os.path.join(scene_path, "timestamps.txt")

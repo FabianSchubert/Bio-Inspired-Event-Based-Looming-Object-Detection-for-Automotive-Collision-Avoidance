@@ -2,22 +2,28 @@ from turtle import back
 import bpy
 import numpy as np
 
+from enum import Enum
+
 import os
 import sys
 
 import json
 
+device_mode = Enum("device_mode", ["CPU", "GPU"])
+
 
 def set_up_looming_scene(
-    loom_obj_file,
-    bg_file,
-    t_run,
-    fps,
-    vel,
-    width,
-    height,
-    render_output_dir,
-    cam_fov_deg=45.0,
+    loom_obj_file: str,
+    bg_file: str,
+    t_run: float,
+    fps: int,
+    vel: float,
+    width: int,
+    height: int,
+    render_output_dir: str,
+    cam_fov_deg: float = 45.0,
+    num_threads: int = -1,  # number of threads to be used by the renderer. -1 means automatic,
+    device: str = "CPU",
 ):
     if not render_output_dir.endswith("/"):
         render_output_dir += "/"
@@ -45,15 +51,27 @@ def set_up_looming_scene(
     scene.render.resolution_y = height
 
     scene.render.filepath = render_output_dir
-    scene.render.image_settings.file_format = 'PNG'
-    scene.render.engine = 'CYCLES'
+    scene.render.image_settings.file_format = "PNG"
+    scene.render.engine = "CYCLES"
+    scene.cycles.device = device_mode[device].name
+
+    scene.cycles.samples = 10  # less means more grain and stepped edges.
+
+    num_threads = int(num_threads)
+    if num_threads < -1 or num_threads == 0:
+        print(
+            "Warning: Invalid Argument to number of threads: should be > 1 or -1 (automatic)"
+        )
+        num_threads = -1
+    if num_threads == -1:
+        scene.render.threads_mode = "AUTO"
+    else:
+        scene.render.threads_mode = "FIXED"
+        scene.render.threads = num_threads
     ####
 
     #### attach object
-    rel_path_to_blendfile = loom_obj_file
-    path_to_blendfile = os.path.normpath(
-        os.path.join(os.path.dirname(__file__), rel_path_to_blendfile)
-    )
+    path_to_blendfile = loom_obj_file
 
     obj_name = "Loom_Obj"
     obj_dir = os.path.join(path_to_blendfile, "Object/")
@@ -70,10 +88,7 @@ def set_up_looming_scene(
     for wrld in bpy.data.worlds:
         bpy.data.worlds.remove(wrld)
 
-    rel_path_to_blendfile = bg_file
-    path_to_blendfile = os.path.normpath(
-        os.path.join(os.path.dirname(__file__), rel_path_to_blendfile)
-    )
+    path_to_blendfile = bg_file
 
     obj_name = "World"
     obj_dir = os.path.join(path_to_blendfile, "World/")
@@ -118,9 +133,12 @@ def render_looming_scene(
     vel: float | int,
     t_video: float | int,
     fps: int,
-    width: float,
-    height: float,
+    width: int,
+    height: int,
     cam_fov_deg: float = 45.0,
+    num_threads: int = -1,  # number of threads to be used by the renderer. -1 means automatic
+    device: str = "CPU",
+    force_overwrite: bool = False,
 ) -> None:
     fps = int(fps)
     n_frames = int(t_video * fps)
@@ -144,13 +162,16 @@ def render_looming_scene(
     files_frame_fold = os.listdir(frame_fold)
 
     if files_frame_fold:
-        while True:
-            resp = input("Frame folder not empty! Continue overwriting? [y/n] ").lower()
-            if resp in ["y", "n"]:
-                if resp == "y":
-                    break
-                else:
-                    sys.exit()
+        if force_overwrite:
+            print("Info: Overwriting files in render output folder.")
+        else:
+            while True:
+                resp = input("Frame folder not empty! Continue overwriting? [y/n] ").lower()
+                if resp in ["y", "n"]:
+                    if resp == "y":
+                        break
+                    else:
+                        sys.exit()
 
     for fl in files_frame_fold:
         os.remove(os.path.join(frame_fold, fl))
@@ -171,6 +192,8 @@ def render_looming_scene(
         height,
         frame_fold,
         cam_fov_deg,
+        num_threads=num_threads,
+        device=device,
     )
 
     bpy.ops.render.render(animation=True)
