@@ -1,8 +1,8 @@
 import numpy as np
 
-from src.simulator_LGMD import LGMD_model
-from src.utils import make_sdf, iou_patches
-from src.format_spike_data import get_atis_event_array
+from src.lgmd_sim.simulator_LGMD import LGMD_model
+from src.utils import make_sdf, compare_boxes_patches, iou
+from src.lgmd_sim.format_spike_data import get_atis_event_array
 
 from sklearn.metrics import f1_score
 
@@ -54,7 +54,7 @@ def evaluate_response(
     # looming sequence files.
     FILE_IDS = [
         fn.split("bbox_looming_sequences.npy")[0]
-        for fn in glob(os.path.join(DATA_FOLD, "*bbox_looming_sequences.npy"))
+        for fn in glob.glob(os.path.join(DATA_FOLD, "*bbox_looming_sequences.npy"))
     ]
 
     N_FILES = len(FILE_IDS)
@@ -175,16 +175,17 @@ def evaluate_response(
 
             lgmd_predictions = np.append(lgmd_predictions, lgmd_sdf_grid_bin.flatten())
 
-            iou = iou_patches(
+            iou_grid = compare_boxes_patches(
                 sq,
                 p_network["INPUT_WIDTH"],
                 p_network["INPUT_HEIGHT"],
                 p_network["N_SUBDIV_X"],
                 p_network["N_SUBDIV_Y"],
                 half_step=p_network["HALF_STEP_TILES"],
+                comp_func=iou,
             )
 
-            iou_bin = np.array(iou).sum(axis=2) > 0.0
+            iou_bin = np.array(iou_grid).sum(axis=2) > 0.0
 
             iou_ground_truth = np.append(iou_ground_truth, iou_bin.flatten())
 
@@ -193,4 +194,8 @@ def evaluate_response(
     network.model.end()
     network.model.unload()
 
-    return metric(iou_ground_truth, lgmd_predictions)
+    return (
+        metric(iou_ground_truth, lgmd_predictions),
+        iou_ground_truth,
+        lgmd_predictions,
+    )

@@ -1,8 +1,19 @@
 import numpy as np
 import functools
+from abc import ABC, abstractmethod
 
 
-class ComposeAugment:
+# just for type hinting, really:
+# __call__ always accepts a numpy array
+# and returns a numpy array.
+class AugmentBase(ABC):
+
+    @abstractmethod
+    def __call__(self, events: np.ndarray) -> np.ndarray:
+        return events
+
+
+class ComposeAugment(AugmentBase):
     def __init__(self, *op_seq):
         self.op_seq = op_seq
         self.compfunc = functools.reduce(
@@ -13,7 +24,7 @@ class ComposeAugment:
         return self.compfunc(events)
 
 
-class FlipHorizontal:
+class FlipHorizontal(AugmentBase):
     def __init__(self, sensor_size, rng, flp_chance=0.5):
         self.sensor_size = sensor_size
         self.rng = rng
@@ -22,14 +33,15 @@ class FlipHorizontal:
     def __call__(self, events: np.ndarray) -> np.ndarray:
         flipped_events = np.array(events)
         if self.rng.uniform() <= self.flp_chance:
-            flipped_events["x"] = self.sensor_size[0] - flipped_events["x"]
+            flipped_events["x"] = self.sensor_size[0] - 1 - flipped_events["x"]
 
         return flipped_events
 
 
-class Crop:
+class Crop(AugmentBase):
     def __init__(self, sensor_size, rng, min_scale=0.33, max_scale=1.0):
         self.sensor_size = sensor_size
+        self.max_pos = (sensor_size[0] - 1, sensor_size[1] - 1)
         self.rng = rng
         self.min_scale = min_scale
         self.max_scale = max_scale
@@ -37,10 +49,10 @@ class Crop:
     def __call__(self, events: np.ndarray) -> np.ndarray:
         scale = self.rng.uniform(self.min_scale, self.max_scale)
 
-        x0 = self.rng.uniform(0.0, self.sensor_size[0] * (1.0 - scale))
-        y0 = self.rng.uniform(0.0, self.sensor_size[1] * (1.0 - scale))
-        x1 = x0 + scale * self.sensor_size[0]
-        y1 = y0 + scale * self.sensor_size[1]
+        x0 = self.rng.uniform(0.0, self.max_pos[0] * (1.0 - scale))
+        y0 = self.rng.uniform(0.0, self.max_pos[1] * (1.0 - scale))
+        x1 = x0 + scale * self.max_pos[0]
+        y1 = y0 + scale * self.max_pos[1]
 
         cropped_events = np.array(
             events[

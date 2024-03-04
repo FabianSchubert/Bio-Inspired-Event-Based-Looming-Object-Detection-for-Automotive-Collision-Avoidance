@@ -7,38 +7,67 @@ from src.default_settings import p as p_default
 from sklearn.metrics import f1_score
 
 from scipy.optimize import minimize
+from scipy.optimize import dual_annealing
 
 from ray.tune.search.bayesopt import BayesOptSearch
 from ray import tune
 
 import os
 
-OPT_PARAMS = [
-    "SCALE_KERNEL_G",
-    "SCALE_KERNEL_D",
-    "W_IN_S_E",
-    "W_S_LGMD",
-    "W_IN_LGMD",
-    "TAU_SYN_IN_S_I",
-    "TAU_SYN_IN_S_E",
-    "TAU_IN_LGMD",
-    "THRESH_IN_LGMD",
-    "TAU_MEM_P",
-    "V_THRESH_P",
-    "V_RESET_P",
-    "TAU_MEM_S",
-    "V_THRESH_S",
-    "V_RESET_S",
-    "TAU_MEM_LGMD",
-    "V_THRESH_LGMD",
-    "V_RESET_LGMD",
-    "SYN_DELAY_LGMD",
-]
+from enum import Enum
+
+from cProfile import Profile
+from pstats import SortKey, Stats
+
+
+class ParamType(Enum):
+    POS = 0
+    NEG = 1
+    POSNEG = 2
+
+
+OPT_PARAMS = {
+    "SCALE_KERNEL_G": ParamType.POS,
+    "SCALE_KERNEL_D": ParamType.POS,
+    "W_IN_S_E": ParamType.POS,
+    "W_S_LGMD": ParamType.POS,
+    "W_IN_LGMD": ParamType.NEG,
+    "TAU_SYN_IN_S_I": ParamType.POS,
+    "TAU_SYN_IN_S_E": ParamType.POS,
+    "TAU_IN_LGMD": ParamType.POS,
+    "THRESH_IN_LGMD": ParamType.POS,
+    "TAU_MEM_P": ParamType.POS,
+    "V_THRESH_P": ParamType.POSNEG,
+    "V_RESET_P": ParamType.POSNEG,
+    "TAU_MEM_S": ParamType.POS,
+    "V_THRESH_S": ParamType.POSNEG,
+    "V_RESET_S": ParamType.POSNEG,
+    "TAU_MEM_LGMD": ParamType.POS,
+    "V_THRESH_LGMD": ParamType.POSNEG,
+    "V_RESET_LGMD": ParamType.POSNEG,
+    "SYN_DELAY_LGMD": ParamType.POS,
+}
+
+OPT_PARAMS_LIMITS = []
+for k, pt in OPT_PARAMS.items():
+    v = p_default[k]
+    if pt == ParamType.POS:
+        OPT_PARAMS_LIMITS.append((0.0, v * 2.0))
+    elif pt == ParamType.NEG:
+        OPT_PARAMS_LIMITS.append((v * 2.0, 0.0))
+    else:
+        OPT_PARAMS_LIMITS.append((-np.abs(2.0 * v), np.abs(2.0 * v)))
 
 
 def f_optim_neg(x_optim):
-    score = -evaluate_response(
-        x_optim,
+    x_optim_transf = [
+        lim[0] + x * (lim[1] - lim[0]) for x, lim in zip(x_optim, OPT_PARAMS_LIMITS)
+    ]
+
+    # x_optim_transf = [x_optim[k] * search_scale[k] + x0[k] for k in range(len(x_optim))]
+
+    score, *_ = evaluate_response(
+        x_optim_transf,
         DATA_FOLD,
         N_SAMPLE,
         SEED_RNG_SAMPLE,
@@ -47,21 +76,7 @@ def f_optim_neg(x_optim):
         SCALE_SDF,
         metric=f1_score,
     )
-    return score
-
-
-def f_optim(p_optim, *args):
-    score = evaluate_response(
-        p_optim,
-        DATA_FOLD,
-        N_SAMPLE,
-        SEED_RNG_SAMPLE,
-        p_default,
-        SIGM_SDF,
-        SCALE_SDF,
-        metric=f1_score,
-    )
-    return {"score": score}
+    return -score
 
 
 def logger_callback(intermediate_result):
@@ -86,104 +101,31 @@ def logger_callback(intermediate_result):
 #########################
 if __name__ == "__main__":
     DATA_FOLD = "/mnt/data0/prophesee_data/ATIS_Automotive_Detection_Dataset/test_a/"
-    N_SAMPLE = 50
+    N_SAMPLE = 3
     SEED_RNG_SAMPLE = 42
     SIGM_SDF = 100.0
     SCALE_SDF = 1.0
 
-    NUM_ITERATIONS_OPT = 100
+    NUM_ITERATIONS_OPT = 1
 
-    search_bounds = [
-        (0.0, 100.0),
-        (0.0, 100.0),
-        (0.0, 10.0),
-        (0.0, 1.0),
-        (-10.0, 0.0),
-        (0.0, 1000.0),
-        (0.0, 500.0),
-        (0.0, 500.0),
-        (0.0, 1000.0),
-        (0.0, 500.0),
-        (0.0, 10.0),
-        (-1.0, 1.0),
-        (0.0, 250.0),
-        (0.0, 10.0),
-        (-5.0, 5.0),
-        (0.0, 500.0),
-        (0.0, 5.0),
-        (-5.0, 5.0),
-        (0.0, 500.0),
-    ]
-
-    SCALE_SIMPLEX_INIT = 0.25
+    # SCALE_SIMPLEX_INIT = 0.25
 
     dim_opt = len(OPT_PARAMS)
 
-    x0 = [p_default[key] for key in OPT_PARAMS]
+    x0 = [0.5] * dim_opt
 
-    init_simplex = np.empty((dim_opt + 1, dim_opt))
-    for i in range(dim_opt + 1):
-        for j in range(dim_opt):
-            low = x0[j] + SCALE_SIMPLEX_INIT * (search_bounds[j][0] - x0[j])
-            high = x0[j] + SCALE_SIMPLEX_INIT * (search_bounds[j][1] - x0[j])
-            init_simplex[i, j] = np.random.rand() * (high - low) + low
+    with Profile() as profile:
+        minimize(
+            f_optim_neg,
+            [0.5] * dim_opt,
+        )
 
-    results = minimize(
-        f_optim_neg,
-        x0,
-        method="Nelder-Mead",
-        bounds=search_bounds,
-        options={
-            "maxiter": NUM_ITERATIONS_OPT,
-            "adaptive": True,
-            "initial_simplex": init_simplex,
-        },
-        callback=logger_callback,
-    )
+        dual_annealing(
+            f_optim_neg,
+            [(0.0, 1.0)] * dim_opt,
+            maxiter=NUM_ITERATIONS_OPT,
+            no_local_search=True,
+        )
+        (Stats(profile).strip_dirs().sort_stats(SortKey.CALLS).print_stats())
 
     __import__("ipdb").set_trace()
-
-    """
-    search_space = {
-        "SCALE_KERNEL_G": tune.uniform(0.0, 100.0),
-        "SCALE_KERNEL_D": tune.uniform(0.0, 100.0),
-        "W_IN_S_E": tune.uniform(0.0, 10.0),
-        "W_S_LGMD": tune.uniform(0.0, 1.0),
-        "W_IN_LGMD": tune.uniform(-10.0, 0.0),
-        "TAU_SYN_IN_S_I": tune.uniform(0.0, 1000.0),
-        "TAU_SYN_IN_S_E": tune.uniform(0.0, 500.0),
-        "TAU_IN_LGMD": tune.uniform(0.0, 500.0),
-        "THRESH_IN_LGMD": tune.uniform(0.0, 1000.0),
-        "TAU_MEM_P": tune.uniform(0.0, 500.0),
-        "V_THRESH_P": tune.uniform(0.0, 10.0),
-        "V_RESET_P": tune.uniform(-1.0, 1.0),
-        "TAU_MEM_S": tune.uniform(0.0, 250.0),
-        "V_THRESH_S": tune.uniform(0.0, 10.0),
-        "V_RESET_S": tune.uniform(-5.0, 5.0),
-        "TAU_MEM_LGMD": tune.uniform(0.0, 500.0),
-        "V_THRESH_LGMD": tune.uniform(0.0, 5.0),
-        "V_RESET_LGMD": tune.uniform(-5.0, 5.0),
-        "SYN_DELAY_LGMD": tune.uniform(0.0, 500.0),
-    }
-
-    initial_search = {key: p_default[key] for key in search_space.keys()}
-
-    p_default["CUDA_VISIBLE_DEVICES"] = True
-
-    bayesopt = BayesOptSearch(
-        metric="score", mode="max", points_to_evaluate=[initial_search]
-    )
-
-    trainable_with_gpu = tune.with_resources(f_optim, {"gpu": 1})
-
-    tuner = tune.Tuner(
-        trainable_with_gpu,
-        tune_config=tune.TuneConfig(
-            search_alg=bayesopt,
-            num_samples=NUM_ITERATIONS_OPT,
-        ),
-        param_space=search_space,
-    )
-
-    tuner.fit()
-    """

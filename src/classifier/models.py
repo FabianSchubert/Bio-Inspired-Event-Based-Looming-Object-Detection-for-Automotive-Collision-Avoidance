@@ -4,7 +4,10 @@ from pygenn.genn_wrapper.Models import VarAccess_READ_ONLY_DUPLICATE
 from typing import Optional, Sequence, Union
 from ml_genn.neurons.neuron import Neuron
 from ml_genn.neurons.input import Input
-from src.classifier.utils import PreprocessedSpikesPol, batch_spikes_pol
+from src.classifier.utils.preprocess_spikes import (
+    PreprocessedSpikesPol,
+    batch_spikes_pol,
+)
 from ml_genn.utils.data import calc_start_spikes
 from ml_genn.utils.model import NeuronModel
 from ml_genn.utils.value import InitValue, ValueDescriptor

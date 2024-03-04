@@ -15,3 +15,5 @@ BOXES_DTYPE = [
     ("confidence", "<f4"),
     ("track_id", "<u4"),
 ]
+
+EVENTS_DTYPE = [("t", "<u4"), ("x", "<u2"), ("y", "<u2"), ("p", "<u2")]

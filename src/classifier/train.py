@@ -1,19 +1,22 @@
 import numpy as np
 
 from ml_genn.compilers import EventPropCompiler, InferenceCompiler
-from ml_genn.callbacks import Checkpoint, SpikeRecorder, VarRecorder
-from ml_genn.serialisers import Numpy
-from ml_genn import Network
+from ml_genn.callbacks import Checkpoint, SpikeRecorder, VarRecorder  # type: ignore
+from ml_genn.serialisers import Numpy  # type: ignore
+from ml_genn import Network  # type: ignore
 
 from ml_genn import Population
 
-from src.classifier.utils import preprocess_tonic_spikes_pol
+from src.classifier.utils.preprocess_spikes import preprocess_tonic_spikes_pol
+from src.classifier.augmentation import AugmentBase
 
-from time import perf_counter
+from time import perf_counter, strftime
 
 from typing import Any, Text, TextIO
 
 import os
+
+import pandas as pd
 
 DT = 1.0
 
@@ -30,14 +33,41 @@ def write_result_line(
     resfile.flush()
 
 
+class ResultLogger:
+    def __init__(self, fold: str, network_name: str):
+        self.fold = fold
+
+        if not os.path.exists(fold):
+            os.makedirs(fold)
+
+        self.epochs: list[int] = []
+        self.train_acc: list[float] = []
+        self.val_acc: list[float] = []
+
+        self.filename = f"{network_name}_{strftime('%d_%m_%Y_%Hh-%Mm')}_results.txt"
+
+        self.full_path = os.path.join(self.fold, self.filename)
+
+    def update(self, epoch: int, train_res: float, val_res: float):
+        self.epochs.append(epoch)
+        self.train_acc.append(train_res)
+        self.val_acc.append(val_res)
+
+        df = pd.DataFrame(
+            {"epoch": self.epochs, "train acc": self.train_acc, "val acc": self.val_acc}
+        )
+        df.to_csv(self.full_path)
+
+
 def train_network(
     network: Network,
     data_train: list[tuple],
     data_val: list[tuple],
-    sensor_size: tuple[int],
+    sensor_size: tuple[int, int, int],
     n_epochs: int,
     shuffle: bool = True,
-    event_ordering: tuple[str] = ("t", "x", "y", "p"),
+    augmentation: AugmentBase | None = None,
+    event_ordering: tuple[str, str, str, str] = ("t", "x", "y", "p"),
     rec_populations: dict[str, Population] = {},
     resfile_path: str | None = "./",
     network_name: str = "eventprop_net",
@@ -45,12 +75,10 @@ def train_network(
 ):
     save_results = resfile_path is not None
     if save_results:
-        if not os.path.exists(resfile_path):
-            os.makedirs(resfile_path)
-
-        result_stream = open(
-            os.path.join(resfile_path, network_name + "_results.txt"), "a"
-        )
+        resfile_path = str(resfile_path)
+        res_logger = ResultLogger(resfile_path, network_name)
+    else:
+        del resfile_path
 
     evts_train, labels_train = (
         [dat[0] for dat in data_train],
@@ -99,8 +127,12 @@ def train_network(
             # spikes, labels = [], []
             spikes_train = []
             for events in evts_train:
+                events_augment = augmentation(events) if augmentation else events
+                # events_augment = events
                 spikes_train.append(
-                    preprocess_tonic_spikes_pol(events, event_ordering, sensor_size)
+                    preprocess_tonic_spikes_pol(
+                        events_augment, event_ordering, sensor_size
+                    )
                 )
             # Train epoch
             metrics, val_metrics, rec_data, val_rec_data = compiled_net.train(
@@ -113,11 +145,14 @@ def train_network(
                 validation_x={input_pop: spikes_val},
                 validation_y={output_pop: labels_val},
             )
+
+            __import__("ipdb").set_trace()
+
             if save_results:
-                write_result_line(
-                result_stream, ep, metrics[output_pop].result, val_metrics[output_pop].result, ""
-            )
-            
+                res_logger.update(
+                    ep, metrics[output_pop].results, val_metrics[output_pop].result
+                )
+
             end_time = perf_counter()
             print(f"Accuracy = {100 * metrics[output_pop].result}%")
             print(f"Time = {end_time - start_time}s")

@@ -1,11 +1,14 @@
 from src.default_settings import params as def_params
-from src.classifier.network import generate_full_conn_network
+from src.classifier.network import generate_full_conn_network, generate_cnn_network
 from src.classifier.data_io import load_file
 from src.classifier.train import train_network
+from src.classifier.augmentation import ComposeAugment, FlipHorizontal, Crop
 
-from ml_genn.optimisers import Adam
+from ml_genn.optimisers import Adam  # type: ignore
 
 from pygenn.genn_wrapper.CUDABackend import DeviceSelect_MANUAL
+
+import numpy as np
 
 data_train = load_file("./data/balanced_pruned/train_a_td.npy")
 data_val = load_file("./data/balanced_pruned/val_a_td.npy")
@@ -14,12 +17,14 @@ INPUT_WIDTH = int(def_params["INPUT_WIDTH"] / def_params["N_SUBDIV_X"])
 INPUT_HEIGHT = int(def_params["INPUT_HEIGHT"] / def_params["N_SUBDIV_Y"])
 
 N_IN = INPUT_WIDTH * INPUT_HEIGHT
-N_HIDDEN = 1024
+N_HIDDEN = 512
 N_OUT = 3
 
 N_EPOCHS = 100
 
-SENSOR_SIZE = (INPUT_WIDTH, INPUT_HEIGHT, 2)
+SENSOR_SIZE = (INPUT_WIDTH, INPUT_HEIGHT, 2)  # preprocess spikes wants this ordering
+INPUT_SIZE = (INPUT_HEIGHT, INPUT_WIDTH, 1)  # ml genn wants this ordering
+# INPUT_SIZE = (INPUT_WIDTH, INPUT_HEIGHT, 1)
 
 GPU_ID = None
 
@@ -34,16 +39,30 @@ COMPILER_ARGS = {
     "reg_lambda_lower": 4e-9,
     "reg_nu_upper": 5,
     "max_spikes": 1500,
-    "optimiser": Adam(0.0005),
+    "optimiser": Adam(0.002),
     "batch_size": 32,
     "kernel_profiling": True,
-        **GENN_KWARGS,
+    **GENN_KWARGS,
 }
 
-net = generate_full_conn_network(N_IN, N_HIDDEN, N_OUT, recurrent=True)
+rng_augment = np.random.default_rng()
 
-train_network(net, data_train, data_val, SENSOR_SIZE, N_EPOCHS, **COMPILER_ARGS)
+augment_pipe = ComposeAugment(
+    Crop(SENSOR_SIZE[:2], rng_augment, min_scale=0.75, max_scale=1.0),
+    FlipHorizontal(SENSOR_SIZE[:2], rng_augment),
+)
+
+# net = generate_full_conn_network(N_IN, N_HIDDEN, N_OUT, recurrent=True)
+net = generate_cnn_network(INPUT_SIZE, N_HIDDEN, N_OUT)
+
+train_network(
+    net,
+    data_train,
+    data_val,
+    SENSOR_SIZE,
+    N_EPOCHS,
+    augmentation=None,  # augment_pipe,
+    **COMPILER_ARGS
+)
 
 __import__("ipdb").set_trace()
-
-

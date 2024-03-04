@@ -10,6 +10,9 @@ src/prophesee_automotive_dataset_toolbox/
 # ignore data folder
 data
 
+# ignore npz files
+*.npz
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]

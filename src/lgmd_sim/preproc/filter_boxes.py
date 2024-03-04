@@ -196,7 +196,7 @@ def detect_looming_sequences(
                 state = 1
             elif state == 1 and (
                 np.isnan(box_sizes_array[t, k])
-                or (box_sizes_array[t, k] < box_sizes_array[t - 1, k])
+                or (box_sizes_array[t, k] <= box_sizes_array[t - 1, k])
             ):
                 t1 = t - 1
                 state = 0
