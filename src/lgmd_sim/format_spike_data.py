@@ -1,5 +1,5 @@
 import numpy as np
-from src.prophesee_automotive_dataset_toolbox.src.io.psee_loader import PSEELoader
+from prophesee_toolbox.io.psee_loader import PSEELoader
 
 
 def get_atis_event_array(filename, t0_ms=0, t1_ms=None):

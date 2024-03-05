@@ -20,7 +20,6 @@ def convert_spk_id_to_evt_array(
     height: int,
     spike_pol: None | np.ndarray = None,
 ) -> np.ndarray:
-    
     if spike_id.shape[0] > 0:
         assert (
             spike_id.max() < width * height
@@ -49,15 +48,15 @@ VEL_MPS = [
     # 0.5,
     # 1.0,
     # 1.5,
-    2.0,
+    #2.0,
     # 2.5,
-    # 3.0,
+     3.0,
 ]
 
 OBJECTS = [
-    "disc_bright",
+    #"disc_bright",
     # "disc_dark",
-    # "square_bright",
+    "square_bright",
     # "square_dark",
 ]
 
@@ -100,7 +99,20 @@ for vel, obj, bg in product(VEL_MPS, OBJECTS, BACKGROUNDS):
         lgmd_network.S_height,
     )
 
-    play_var_anim(vs, 0.0, 10000., params["DT_MS"], 50., vs.min(), vs.max(), os.path.join(data_fold, "vs_anim/"))
+    play_var_anim(
+        vs,
+        0.0,
+        10000.0,
+        params["DT_MS"],
+        100.0,
+        -np.maximum(0., vs.max()),
+        np.maximum(0., vs.max()),
+        os.path.join(data_fold, "vs_anim/"),
+    )
+
+    play_event_anim(
+        evts_s, 0.0, 10000, 50.0, lgmd_network.S_width, lgmd_network.S_height
+    )
 
     import pdb
 

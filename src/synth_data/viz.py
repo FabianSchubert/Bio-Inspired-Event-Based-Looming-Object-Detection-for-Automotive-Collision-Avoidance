@@ -66,7 +66,16 @@ def play_event_anim(
     plt.show()
 
 
-def play_var_anim(var: np.ndarray, t_start: float, t_end: float, dt_rec: float, dt_play: float, vmin: float, vmax: float, save_frames: None | str = None) -> None:
+def play_var_anim(
+    var: np.ndarray,
+    t_start: float,
+    t_end: float,
+    dt_rec: float,
+    dt_play: float,
+    vmin: float,
+    vmax: float,
+    save_frames: None | str = None,
+) -> None:
     fig, ax = plt.subplots()
 
     t_run = t_end - t_start
@@ -75,21 +84,22 @@ def play_var_anim(var: np.ndarray, t_start: float, t_end: float, dt_rec: float, 
 
     t_frames = t_start + np.arange(n_frames) * dt_play
 
-    ind_frames = (t_frames/dt_rec).astype("int")
+    ind_frames = (t_frames / dt_rec).astype("int")
 
     frames_it = list(zip(ind_frames, np.arange(ind_frames.shape[0])))
 
     aximg = ax.imshow(var[0], vmin=vmin, vmax=vmax)
+
+    plt.colorbar(aximg, ax=ax)
 
     if save_frames:
         if not os.path.exists(save_frames):
             os.makedirs(save_frames)
 
     def init():
-        return aximg,
+        return (aximg,)
 
     def update(frame):
-        
         frame_id, frame_idx = frame
 
         new_img = np.zeros(var.shape[1:])

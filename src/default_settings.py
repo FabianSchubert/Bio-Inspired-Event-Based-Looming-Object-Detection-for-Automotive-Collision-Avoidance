@@ -32,13 +32,13 @@ p = {
     "KERNEL_WIDTH": 5,  # inhibition kernel width; needs to be ODD
     "KERNEL_HEIGHT": 5,  # inhibition kernel height; needs to be ODD
     # -0.2*
-    "KERNEL_G": -1.0 * kernel_g.flatten(),
+    "KERNEL_G": -kernel_g.flatten(),
     "SCALE_KERNEL_G": 1.0,
-    "KERNEL_D": int(50.) * kernel_d.flatten(),
-    "SCALE_KERNEL_D": 1.0,
-    "TAU_SYN_IN_S_I": 100.,
-    "W_IN_S_E": 1,
-    "TAU_SYN_IN_S_E": 100.,
+    "KERNEL_D": np.ones((25), dtype="int"), #kernel_d.flatten(),
+    "SCALE_KERNEL_D": 200.0,
+    "TAU_SYN_IN_S_I": 150.,
+    "W_IN_S_E": .25,
+    "TAU_SYN_IN_S_E": 150.,
     "W_S_LGMD": 0.02,  # 0.04,
     "W_IN_LGMD": -0.5,  # -0.04,
     "TAU_IN_LGMD": 50.,
@@ -49,8 +49,8 @@ p = {
     "TAU_MEM_P": 50.,
     "V_THRESH_P": 0.1,
     "V_RESET_P": 0.0,
-    "TAU_MEM_S": 20.0,
-    "V_THRESH_S": 99999.,  # S Theta in Blanchard et al. 2000
+    "TAU_MEM_S": 50.0,
+    "V_THRESH_S": 5.,  # S Theta in Blanchard et al. 2000
     "V_RESET_S": 0.0,  # S "Reset alpha" in Blanchard et al. 2000
     "TAU_MEM_LGMD": 20.0,
     "V_THRESH_LGMD": 1.0,
