@@ -100,6 +100,8 @@ for vel, obj, bg in product(VEL_MPS, OBJECTS, BACKGROUNDS):
         lgmd_network.S_height,
     )
 
+    play_var_anim(vs, 0.0, 10000., params["DT_MS"], 50., vs.min(), vs.max(), os.path.join(data_fold, "vs_anim/"))
+
     import pdb
 
     pdb.set_trace()

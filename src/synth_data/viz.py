@@ -5,6 +5,8 @@ from matplotlib.axes import Axes
 from matplotlib.image import AxesImage
 from typing import Union
 
+import os
+
 
 def gen_evt_hist(evts: np.ndarray, t: float, dt: float, w: int, h: int) -> np.ndarray:
     evts_filt = evts[(evts["t"] >= t) & (evts["t"] < (t + dt))]
@@ -64,7 +66,7 @@ def play_event_anim(
     plt.show()
 
 
-def play_var_anim(var: np.ndarray, t_start: float, t_end: float, dt_rec: float, dt_play: float, vmin: float, vmax: float) -> None:
+def play_var_anim(var: np.ndarray, t_start: float, t_end: float, dt_rec: float, dt_play: float, vmin: float, vmax: float, save_frames: None | str = None) -> None:
     fig, ax = plt.subplots()
 
     t_run = t_end - t_start
@@ -75,24 +77,35 @@ def play_var_anim(var: np.ndarray, t_start: float, t_end: float, dt_rec: float, 
 
     ind_frames = (t_frames/dt_rec).astype("int")
 
+    frames_it = list(zip(ind_frames, np.arange(ind_frames.shape[0])))
+
     aximg = ax.imshow(var[0], vmin=vmin, vmax=vmax)
+
+    if save_frames:
+        if not os.path.exists(save_frames):
+            os.makedirs(save_frames)
 
     def init():
         return aximg,
 
     def update(frame):
         
+        frame_id, frame_idx = frame
+
         new_img = np.zeros(var.shape[1:])
 
-        if frame < var.shape[0]:
-            new_img[:] = var[frame]
+        if frame_id < var.shape[0]:
+            new_img[:] = var[frame_id]
 
         aximg.set_data(new_img)
+
+        if save_frames:
+            fig.savefig(os.path.join(save_frames, f"anim_{frame_idx}.png"))
 
         return (aximg,)
 
     ani = FuncAnimation(
-        fig, update, frames=ind_frames, init_func=init, blit=True, interval=dt_play
+        fig, update, frames=frames_it, init_func=init, blit=True, interval=dt_play
     )
 
     plt.show()
