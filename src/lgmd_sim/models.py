@@ -62,25 +62,28 @@ lif_neuron = genn_model.create_custom_neuron_class(
 
 s_neuron = genn_model.create_custom_neuron_class(
     "S",
-    param_names=["tau_m", "V_thresh", "V_reset"],
+    param_names=["tau_m", "V_thresh", "V_reset", "reg_norm"],
     var_name_types=[
-        ("VI", "scalar"),
-        ("VE", "scalar"),
         ("V", "scalar"),
-        ("I", "scalar"),
+        ("Vx", "scalar"),
+        ("Vy", "scalar"),
     ],
     sim_code="""
-    $(VI) = min(1.0, $(Isyn_I));
-    $(VE) = $(Isyn_E);
+    $(Vx) = $(Isyn_x) * $(Isyn_center) / ($(Isyn_norm) + $(reg_norm));
+    $(Vy) = $(Isyn_y) * $(Isyn_center) / ($(Isyn_norm) + $(reg_norm));
 
-    $(I) = $(VE) * (1.0 - $(VI));
-
-    $(V) += ($(I) - $(V)) / $(tau_m) * DT;
+    $(V) += (sqrt($(Vx)*$(Vx) + $(Vy)*$(Vy)) - $(V)) / $(tau_m) * DT;
     """,
     threshold_condition_code="$(V) >= $(V_thresh)",
     reset_code="""
     $(V)-= $(V_reset);  // soft reset by $(V_reset)
     """,
+    additional_input_vars=[
+        ("Isyn_x", "scalar", 0.0),
+        ("Isyn_y", "scalar", 0.0),
+        ("Isyn_center", "scalar", 0.0),
+        ("Isyn_norm", "scalar", 0.0),
+    ],
     is_auto_refractory_required=False,
 )
 

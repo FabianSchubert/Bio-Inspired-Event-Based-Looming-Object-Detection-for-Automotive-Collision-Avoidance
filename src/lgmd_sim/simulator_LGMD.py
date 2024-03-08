@@ -7,6 +7,7 @@ from pygenn.genn_wrapper import NO_DELAY
 from .models import (
     bitmask_array_current_source,
     lif_neuron,
+    s_neuron,
     one_one_with_boundary,
     threshold_exp_curr,
 )
@@ -112,8 +113,9 @@ class LGMD_model:
             "tau_m": p["TAU_MEM_S"],
             "V_thresh": p["V_THRESH_S"],
             "V_reset": p["V_RESET_S"],
+            "reg_norm": p["S_REG_NORM"],
         }
-        self.S_inivars = {"V": 0.0, "VI": 0.0}
+        self.S_inivars = {"V": 0.0, "Vx": 0.0, "Vy": 0.0}
 
         # LGMD neuron
         LGMD_params = {
@@ -137,10 +139,19 @@ class LGMD_model:
             "out_xoff": p["KERNEL_WIDTH"] // 2,
         }
 
-        # inhibitory input to S
-        self.in_S_I_inivars = {
-            "g": p["KERNEL_G"] * p["SCALE_KERNEL_G"],
-            "d": (p["KERNEL_D"] * p["SCALE_KERNEL_D"]).astype("int"),
+        self.in_S_x_inivars = {
+            "g": p["KERNEL_SX"],
+            "d": p["KERNEL_D"].astype("int"),
+        }
+
+        self.in_S_y_inivars = {
+            "g": p["KERNEL_SY"],
+            "d": p["KERNEL_D"].astype("int"),
+        }
+
+        self.in_S_norm_inivars = {
+            "g": p["KERNEL_SNORM"],
+            "d": p["KERNEL_D"].astype("int"),
         }
 
         self.I_kernel_params = {
@@ -154,7 +165,15 @@ class LGMD_model:
             "conv_oc": 1,
         }
 
-        self.in_S_I_iniconn = genn_model.init_toeplitz_connectivity(
+        self.in_S_x_iniconn = genn_model.init_toeplitz_connectivity(
+            "Conv2D", self.I_kernel_params
+        )
+
+        self.in_S_y_iniconn = genn_model.init_toeplitz_connectivity(
+            "Conv2D", self.I_kernel_params
+        )
+
+        self.in_S_norm_iniconn = genn_model.init_toeplitz_connectivity(
             "Conv2D", self.I_kernel_params
         )
 
@@ -169,8 +188,10 @@ class LGMD_model:
         self.S = []
         self.LGMD = []
 
-        self.in_S_E = []
-        self.in_S_I = []
+        self.in_S_x = []
+        self.in_S_y = []
+        self.in_S_center = []
+        self.in_S_norm = []
         self.S_LGMD = []
         self.in_LGMD = []
 
@@ -222,7 +243,7 @@ class LGMD_model:
 
                 self.S.append(
                     self.model.add_neuron_population(
-                        f"S_{k}_{l}", self.n_S, lif_neuron, S_params, self.S_inivars
+                        f"S_{k}_{l}", self.n_S, s_neuron, S_params, self.S_inivars
                     )
                 )
 
@@ -234,9 +255,59 @@ class LGMD_model:
                     )
                 )
 
-                self.in_S_E.append(
+                self.in_S_x.append(
                     self.model.add_synapse_population(
-                        f"in_S_E_{k}_{l}",
+                        f"in_S_x_{k}_{l}",
+                        "TOEPLITZ_KERNELG",
+                        NO_DELAY,
+                        self.P[-1],
+                        self.S[-1],
+                        "StaticPulseDendriticDelay",
+                        {},
+                        self.in_S_x_inivars,
+                        {},
+                        {},
+                        "DeltaCurr",
+                        {},
+                        {},
+                        self.in_S_x_iniconn,
+                    )
+                )
+
+                self.in_S_x[-1].ps_target_var = "Isyn_x"
+
+                self.in_S_x[-1].pop.set_max_dendritic_delay_timesteps(
+                    int(self.in_S_x_inivars["d"].max() + 1)
+                )
+
+                self.in_S_y.append(
+                    self.model.add_synapse_population(
+                        f"in_S_y_{k}_{l}",
+                        "TOEPLITZ_KERNELG",
+                        NO_DELAY,
+                        self.P[-1],
+                        self.S[-1],
+                        "StaticPulseDendriticDelay",
+                        {},
+                        self.in_S_y_inivars,
+                        {},
+                        {},
+                        "DeltaCurr",
+                        {},
+                        {},
+                        self.in_S_y_iniconn,
+                    )
+                )
+
+                self.in_S_y[-1].ps_target_var = "Isyn_y"
+
+                self.in_S_y[-1].pop.set_max_dendritic_delay_timesteps(
+                    int(self.in_S_y_inivars["d"].max() + 1)
+                )
+
+                self.in_S_center.append(
+                    self.model.add_synapse_population(
+                        f"in_S_center_{k}_{l}",
                         "SPARSE_GLOBALG",
                         NO_DELAY,
                         self.P[-1],
@@ -246,8 +317,8 @@ class LGMD_model:
                         {"g": p["W_IN_S_E"]},
                         {},
                         {},
-                        "ExpCurr",
-                        {"tau": p["TAU_SYN_IN_S_E"]},
+                        "DeltaCurr",
+                        {},
                         {},
                         genn_model.init_connectivity(
                             one_one_with_boundary, iniconn_params
@@ -255,27 +326,31 @@ class LGMD_model:
                     )
                 )
 
-                self.in_S_I.append(
+                self.in_S_center[-1].ps_target_var = "Isyn_center"
+
+                self.in_S_norm.append(
                     self.model.add_synapse_population(
-                        f"in_S_I_{k}_{l}",
+                        f"in_S_norm_{k}_{l}",
                         "TOEPLITZ_KERNELG",
                         NO_DELAY,
                         self.P[-1],
                         self.S[-1],
                         "StaticPulseDendriticDelay",
                         {},
-                        self.in_S_I_inivars,
+                        self.in_S_norm_inivars,
                         {},
                         {},
-                        "ExpCurr",
-                        {"tau": p["TAU_SYN_IN_S_I"]},
+                        "DeltaCurr",
                         {},
-                        self.in_S_I_iniconn,
+                        {},
+                        self.in_S_norm_iniconn,
                     )
                 )
 
-                self.in_S_I[-1].pop.set_max_dendritic_delay_timesteps(
-                    int(self.in_S_I_inivars["d"].max() + 1)
+                self.in_S_norm[-1].ps_target_var = "Isyn_norm"
+
+                self.in_S_norm[-1].pop.set_max_dendritic_delay_timesteps(
+                    int(self.in_S_norm_inivars["d"].max() + 1)
                 )
 
                 self.S_LGMD.append(
@@ -410,9 +485,9 @@ class LGMD_model:
             ].view(dtype=np.uint32)
             self.input[idx].push_extra_global_param_to_device("spikeBitmask")
 
-            self.input[idx].extra_global_params["polarityBitmask"].view[
-                :
-            ] = self.pol_bm[idx].view(dtype=np.uint32)
+            self.input[idx].extra_global_params["polarityBitmask"].view[:] = (
+                self.pol_bm[idx].view(dtype=np.uint32)
+            )
             self.input[idx].push_extra_global_param_to_device("polarityBitmask")
 
     def run_model(
