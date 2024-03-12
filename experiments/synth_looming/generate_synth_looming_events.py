@@ -10,7 +10,7 @@ P_VID2E = {
     "contrast_threshold_neg": 0.3,
     "refractory_period": 0.0,
     "log_eps": 1e-3,
-    "use_log_img": True
+    "use_log_img": True,
 }
 
 VEL_MPS = [0.5, 1.0, 1.5, 2.0, 2.5, 3.0]
@@ -20,9 +20,10 @@ OBJECTS = [
     "disc_dark",
     "square_bright",
     "square_dark",
+    "disc_rand_struct_bright",
 ]
 
-BACKGROUNDS = ["gray_bg"]
+BACKGROUNDS = ["gray_bg"]  # , "cloudy_bg"]
 
 base_fold = os.path.join(os.path.dirname(__file__), "../../data/synthetic/")
 
@@ -32,4 +33,3 @@ for vel, obj, bg in product(VEL_MPS, OBJECTS, BACKGROUNDS):
     data_fold = os.path.join(base_fold, data_fold)
 
     vid2e(data_fold, esim_params=P_VID2E)
-

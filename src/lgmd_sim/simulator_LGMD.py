@@ -410,9 +410,9 @@ class LGMD_model:
             ].view(dtype=np.uint32)
             self.input[idx].push_extra_global_param_to_device("spikeBitmask")
 
-            self.input[idx].extra_global_params["polarityBitmask"].view[
-                :
-            ] = self.pol_bm[idx].view(dtype=np.uint32)
+            self.input[idx].extra_global_params["polarityBitmask"].view[:] = (
+                self.pol_bm[idx].view(dtype=np.uint32)
+            )
             self.input[idx].push_extra_global_param_to_device("polarityBitmask")
 
     def run_model(
@@ -424,6 +424,7 @@ class LGMD_model:
         rec_synapses=[],
         save_dir=None,
         timing=True,
+        rec_timestep=1.0,
     ):
         """
         Method to run the GeNN model. You may provide new event data by passing
@@ -467,6 +468,9 @@ class LGMD_model:
         # self.sync_input_startspike_with_time()
 
         # NOTE: should we reset variables of neurons and/or synapses before the run?
+
+        t_next_rec = 0.0
+
         while self.model.t <= t_start_ms + trial_ms:
             self.model.step_time()
 
@@ -491,29 +495,33 @@ class LGMD_model:
                                 spike_t[pop_name] = np.append(spike_t[pop_name], x[0])
                                 spike_ID[pop_name] = np.append(spike_ID[pop_name], x[1])
 
-            if len(rec_neurons) > 0:
-                for k, l in product(range(self.n_tiles_y), range(self.n_tiles_x)):
-                    for pop, var in rec_neurons:
-                        pop_name = f"{pop}_{k}_{l}"
-                        the_pop = self.model.neuron_populations[pop_name]
-                        the_pop.pull_var_from_device(var)
-                        rec_vars_n[var + pop_name].append(the_pop.vars[var].view.copy())
-                rec_n_t.append(self.model.t)
-
-            if len(rec_synapses) > 0:
-                for k, l in product(range(self.n_tiles_y), range(self.n_tiles_x)):
-                    for pop, var in rec_synapses:
-                        pop_name = f"{pop}_{k}_{l}"
-                        the_pop = self.model.synapse_populations[pop_name]
-                        if var == "in_syn":
-                            the_pop.pull_in_syn_from_device()
-                            rec_vars_s[var + pop_name].append(the_pop.in_syn.copy())
-                        else:
+            if self.model.t >= t_next_rec:
+                t_next_rec = self.model.t + rec_timestep
+                if len(rec_neurons) > 0:
+                    for k, l in product(range(self.n_tiles_y), range(self.n_tiles_x)):
+                        for pop, var in rec_neurons:
+                            pop_name = f"{pop}_{k}_{l}"
+                            the_pop = self.model.neuron_populations[pop_name]
                             the_pop.pull_var_from_device(var)
-                            rec_vars_s[var + pop_name].append(
+                            rec_vars_n[var + pop_name].append(
                                 the_pop.vars[var].view.copy()
                             )
-                rec_s_t.append(self.model.t)
+                    rec_n_t.append(self.model.t)
+
+                if len(rec_synapses) > 0:
+                    for k, l in product(range(self.n_tiles_y), range(self.n_tiles_x)):
+                        for pop, var in rec_synapses:
+                            pop_name = f"{pop}_{k}_{l}"
+                            the_pop = self.model.synapse_populations[pop_name]
+                            if var == "in_syn":
+                                the_pop.pull_in_syn_from_device()
+                                rec_vars_s[var + pop_name].append(the_pop.in_syn.copy())
+                            else:
+                                the_pop.pull_var_from_device(var)
+                                rec_vars_s[var + pop_name].append(
+                                    the_pop.vars[var].view.copy()
+                                )
+                    rec_s_t.append(self.model.t)
 
             if self.model.timestep % 1000 == 0:
                 sys.stdout.write(f"t: {self.model.t}\r")
@@ -572,4 +580,4 @@ class LGMD_model:
             print("Neuron update: %f" % self.model.neuron_update_time)
             print("Presynaptic update: %f" % self.model.presynaptic_update_time)
             print("Synapse dynamics: %f" % self.model.synapse_dynamics_time)
-        return (spike_t, spike_ID, rec_vars_n, rec_vars_s)
+        return (spike_t, spike_ID, rec_vars_n, rec_n_t, rec_vars_s, rec_s_t)

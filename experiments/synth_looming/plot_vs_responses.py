@@ -1,0 +1,72 @@
+import numpy as np
+import matplotlib.pyplot as plt
+
+import pandas as pd
+
+import seaborn as sns
+
+import os
+
+base_fold = os.path.join(
+    os.path.dirname(__file__), "../../data/experiments/synth_looming/"
+)
+
+evt_count = pd.DataFrame(columns=["t", "count", "vel", "object"])
+
+
+for res_fold in os.listdir(os.path.join(base_fold, "results/")):
+
+    vel = float(res_fold.split("_mps")[0][-3:])
+
+    obj = res_fold.split("_on_")[0]
+
+    print(vel)
+
+    res = np.load(os.path.join(base_fold, "results", res_fold, "results.npz"))
+
+    vs = res["vs"]
+    s_spikes = res["evts_s"]
+
+    df_s = pd.DataFrame(s_spikes)
+
+    _evt_count = df_s.groupby("t").sum()
+    _evt_count = _evt_count.sort_index()
+    _evt_count = _evt_count[_evt_count["p"] < 50000.0]
+    _evt_count["t"] = _evt_count.index
+    _evt_count["count"] = _evt_count["p"]
+    _evt_count["vel"] = vel
+    _evt_count["object"] = obj
+    _evt_count.drop(labels=["x", "y", "p"], axis=1, inplace=True)
+
+    evt_count = pd.concat([evt_count, _evt_count], ignore_index=True)
+
+    # ax.plot(evt_count.index, evt_count["p"])
+
+objects = evt_count["object"].unique()
+
+evt_count["t"] = evt_count["t"].astype("float")
+evt_count["count"] = evt_count["count"].astype("float")
+evt_count["t"] = 10.0 * (evt_count["t"] // 10.0)
+
+evt_count_avg = evt_count.groupby(["t", "vel", "object"]).mean().reset_index()
+
+fig, ax = plt.subplots(2, 2, figsize=(6, 5))
+
+for k, obj in enumerate(objects):
+    _ax = ax[k // 2, k % 2]
+
+    sns.lineplot(
+        data=evt_count_avg[evt_count_avg["object"] == obj],
+        x="t",
+        y="count",
+        hue="vel",
+        ax=ax[k // 2, k % 2],
+    )
+
+    _ax.set_title(obj)
+
+fig.tight_layout(pad=0.1)
+
+fig.savefig(os.path.join(base_fold, "s_responses.png"), dpi=500)
+
+plt.show()
