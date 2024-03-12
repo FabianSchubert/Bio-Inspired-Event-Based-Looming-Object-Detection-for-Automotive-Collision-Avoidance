@@ -1,40 +1,16 @@
 from src.lgmd_sim.simulator_LGMD import LGMD_model
 
-from src.default_settings import params as default_params
+from src.lgmd_sim.default_settings import params as default_params
 
-from src.synth_data.viz import plot_event_slice, play_event_anim, play_var_anim
+from src.viz import play_event_anim, play_var_anim
 
-from config import EVENTS_DTYPE
+from src.utils import convert_spk_id_to_evt_array
 
 from itertools import product
 
 import numpy as np
 
 import os
-
-
-def convert_spk_id_to_evt_array(
-    spike_id: np.ndarray,
-    spike_t: np.ndarray,
-    width: int,
-    height: int,
-    spike_pol: None | np.ndarray = None,
-) -> np.ndarray:
-    if spike_id.shape[0] > 0:
-        assert (
-            spike_id.max() < width * height
-        ), "largest spike id does not fit into width & height dimensions"
-
-    assert spike_id.shape[0] == spike_t.shape[0], "array sizes do not match"
-    if not spike_pol:
-        spike_pol = np.ones((spike_id.shape[0]))
-
-    x = spike_id % width
-    y = spike_id // width
-
-    evt_array = np.array(list(zip(spike_t, x, y, spike_pol)), dtype=EVENTS_DTYPE)
-
-    return evt_array
 
 
 params = dict(default_params)
@@ -46,19 +22,19 @@ params["INPUT_EVENT_CURRENT"] = 15.0
 
 VEL_MPS = [
     0.5,
-    # 1.0,
-    # 1.5,
-    # 2.0,
-    # 2.5,
-    # 3.0,
+    1.0,
+    1.5,
+    2.0,
+    2.5,
+    3.0,
 ]
 
 OBJECTS = [
     "disc_bright",
-    # "disc_dark",
-    # "square_bright",
-    # "square_dark",
-    # "disc_rand_struct_bright",
+    "disc_dark",
+    "square_bright",
+    "square_dark",
+    "disc_rand_struct_bright",
 ]
 
 BACKGROUNDS = ["gray_bg"]
@@ -68,7 +44,7 @@ REC_DT = 10.0
 base_fold = os.path.join(os.path.dirname(__file__), "../../data/synthetic/")
 
 base_fold_results = os.path.join(
-    os.path.dirname(__file__), "../../data/experiments/synth_looming/"
+    os.path.dirname(__file__), "../../data/experiments/synth_looming/s_cell_spike_responses/"
 )
 
 lgmd_network = LGMD_model(params)

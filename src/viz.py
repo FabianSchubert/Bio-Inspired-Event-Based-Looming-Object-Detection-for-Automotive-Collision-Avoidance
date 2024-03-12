@@ -119,3 +119,4 @@ def play_var_anim(
     )
 
     plt.show()
+

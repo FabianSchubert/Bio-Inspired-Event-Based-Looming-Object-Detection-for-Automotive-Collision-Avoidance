@@ -1,6 +1,6 @@
 import numpy as np
 
-from config import BOXES_DTYPE
+from src.config import BOXES_DTYPE
 
 
 def balance_undersample(

@@ -4,7 +4,7 @@ import sys
 import os
 from typing import Union
 
-from config import EVENTS_DTYPE
+from src.config import EVENTS_DTYPE
 
 p = {
     "contrast_threshold_pos": 0.8,

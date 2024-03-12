@@ -1,5 +1,5 @@
 import numpy as np
-from .utils import FixedDict
+from ..utils import FixedDict
 import os
 
 # define a few constant parameters based on the Blanchard et al. 2000 paper

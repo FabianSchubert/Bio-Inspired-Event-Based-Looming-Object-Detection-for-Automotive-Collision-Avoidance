@@ -55,6 +55,7 @@ class LGMD_model:
         if p["MODEL_SEED"] is not None:
             self.model._model.set_seed(p["MODEL_SEED"])
 
+        # maximum number of time steps for the input bitmasks
         self.nt_max = p["NT_MAX"]
 
         # we need to fix that because of the spike buffers
@@ -300,7 +301,7 @@ class LGMD_model:
                     self.model.add_synapse_population(
                         f"in_LGMD_{k}_{l}",
                         "DENSE_INDIVIDUALG",
-                        int(p["SYN_DELAY_LGMD"]),
+                        int(p["SYN_DELAY_IN_LGMD"]),
                         self.P[-1],
                         self.LGMD[-1],
                         "StaticPulse",

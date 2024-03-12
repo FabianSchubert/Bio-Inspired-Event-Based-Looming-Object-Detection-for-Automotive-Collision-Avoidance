@@ -1,10 +1,9 @@
 import numpy as np
-import matplotlib.pyplot as plt
-from matplotlib.widgets import Slider
 import collections
 
 from itertools import product
 
+from src.config import EVENTS_DTYPE
 
 class FixedDict(collections.abc.MutableMapping):
     def __init__(self, data):
@@ -34,151 +33,28 @@ class FixedDict(collections.abc.MutableMapping):
     def __str__(self):
         return self.__data.__str__()
 
+def convert_spk_id_to_evt_array(
+    spike_id: np.ndarray,
+    spike_t: np.ndarray,
+    width: int,
+    height: int,
+    spike_pol: None | np.ndarray = None,
+) -> np.ndarray:
+    if spike_id.shape[0] > 0:
+        assert (
+            spike_id.max() < width * height
+        ), "largest spike id does not fit into width & height dimensions"
 
-def play_var_interactive(v, pop, var, n_x, n_y, wd, hd, fig):
-    ax = [
-        [fig.add_subplot(n_y, n_x, k * n_x + l + 1) for l in range(n_x)]
-        for k in range(n_y)
-    ]
+    assert spike_id.shape[0] == spike_t.shape[0], "array sizes do not match"
+    if not spike_pol:
+        spike_pol = np.ones((spike_id.shape[0]))
 
-    t_smp_init = 0
-    t_max = np.inf
+    x = spike_id % width
+    y = spike_id // width
 
-    imgs = []
+    evt_array = np.array(list(zip(spike_t, x, y, spike_pol)), dtype=EVENTS_DTYPE)
 
-    for k in range(n_y):
-        imgs.append([])
-        for l in range(n_x):
-            var_name = f"{var+pop}_{k}_{l}"
-
-            va = np.array(v[var_name])
-            va = np.reshape(va, (va.shape[0], hd, wd))
-
-            t_max = np.minimum(t_max, va.shape[0])
-
-            _ax = ax[k][l]
-
-            _ax.set_xlim([0, wd])
-            _ax.set_ylim([0, hd])
-            _ax.invert_yaxis()
-
-            _ax.xaxis.set_tick_params(labelbottom=False)
-            _ax.yaxis.set_tick_params(labelleft=False)
-
-            _ax.set_xticks([])
-            _ax.set_yticks([])
-
-            img = ax[k][l].imshow(va[t_smp_init], vmin=va.min(), vmax=va.max())
-
-            imgs[-1].append(img)
-
-    fig.subplots_adjust(bottom=0.25)
-
-    ax_slider = fig.add_axes([0.25, 0.1, 0.65, 0.03])
-    t_slider = Slider(
-        ax=ax_slider, label="Time", valmin=0, valmax=t_max - 1, valinit=t_smp_init
-    )
-
-    def update(t_smp):
-        for k in range(n_y):
-            for l in range(n_x):
-                var_name = f"{var+pop}_{k}_{l}"
-
-                va = np.array(v[var_name])
-                va = np.reshape(va, (va.shape[0], hd, wd))
-
-                idx = int(t_smp)
-                imgs[k][l].set_array(va[idx])
-
-        fig.canvas.draw_idle()
-
-    t_slider.on_changed(update)
-
-    return ax, ax_slider, t_slider
-
-
-def play_spikes_from_file(evts_file, w, h):
-    evts = np.load(evts_file)
-    ids = evts[:, :2].astype("int")
-    ids_flat = ids[:, 1] * w + ids[:, 0]
-
-    times = evts[:, 2]
-
-    fig = plt.figure()
-
-    ax, ax_slider, t_slider = play_spikes_interactive(times, [ids_flat], w, h, fig)
-
-    return ax, ax_slider, t_slider
-
-
-def play_spikes_interactive(t, ID, pop, n_x, n_y, wd, hd, fig, tol=1.0):
-    ax = [
-        [fig.add_subplot(n_y, n_x, k * n_x + l + 1) for l in range(n_x)]
-        for k in range(n_y)
-    ]
-
-    lines = []
-
-    t_smp_init = 0
-    t_min = np.inf
-    t_max = 0
-
-    for k in range(n_y):
-        lines.append([])
-        for l in range(n_x):
-            var_name = f"{pop}_{k}_{l}"
-
-            t_min = np.minimum(t_min, t[var_name][0].min())
-            t_max = np.maximum(t_max, t[var_name][0].max())
-
-            _ax = ax[k][l]
-
-            _ax.set_xlim([0, wd])
-            _ax.set_ylim([0, hd])
-            _ax.invert_yaxis()
-
-            _ax.xaxis.set_tick_params(labelbottom=False)
-            _ax.yaxis.set_tick_params(labelleft=False)
-
-            _ax.set_xticks([])
-            _ax.set_yticks([])
-
-            idx_init = np.where(np.abs(t[var_name][0] - t_smp_init) <= tol)[0]
-            ID_smp_init = ID[var_name][0][idx_init]
-            (line,) = ax[k][l].plot(
-                np.array(ID_smp_init) % wd, np.array(ID_smp_init) // wd, "."
-            )
-            lines[-1].append(line)
-
-    fig.subplots_adjust(bottom=0.25)
-
-    ax_slider = fig.add_axes([0.25, 0.1, 0.65, 0.03])
-
-    t_slider = Slider(
-        ax=ax_slider, label="Time", valmin=t_min, valmax=t_max, valinit=t_smp_init
-    )
-
-    def update(t_smp):
-        for k in range(n_y):
-            for l in range(n_x):
-                var_name = f"{pop}_{k}_{l}"
-
-                idx = np.where(np.abs(t[var_name][0] - t_smp) <= tol)[0]
-                ID_smp = ID[var_name][0][idx]
-                lines[k][l].set_data(np.array(ID_smp) % wd, np.array(ID_smp) // wd)
-        fig.canvas.draw_idle()
-
-    t_slider.on_changed(update)
-
-    return ax, ax_slider, t_slider, lines
-
-
-def scatter3D(t, ID, wd):
-    # fig = plt.figure(figsize = (10, 7))
-    # ax = plt.gca()(projection ="3d")
-    x = np.array(ID) % wd
-    y = np.array(ID) // wd
-    plt.gca().scatter3D(t, x, y, ".", s=0.5)
+    return evt_array
 
 
 def gauss_kern(x, sigma):

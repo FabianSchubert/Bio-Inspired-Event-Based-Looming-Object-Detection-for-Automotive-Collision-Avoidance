@@ -8,8 +8,8 @@ from src.classifier.preproc.balance_data import (
 from src.classifier.data_io import load_folders, save_data
 from src.utils import crop_factor
 
-import config
-from src.default_settings import params
+import src.config as config
+from src.lgmd_sim.default_settings import params
 
 import os
 

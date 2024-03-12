@@ -2,7 +2,7 @@ import numpy as np
 import os
 from glob import glob
 
-from config import BOXES_DTYPE
+from src.config import BOXES_DTYPE
 
 
 def load_file(evt_file: str, box_file: (str | None) = None) -> list[tuple]:

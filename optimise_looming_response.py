@@ -2,7 +2,7 @@
 import numpy as np
 
 from src.test_looming_sequences import evaluate_response
-from src.default_settings import p as p_default
+from src.lgmd_sim.default_settings import p as p_default
 
 from sklearn.metrics import f1_score
 

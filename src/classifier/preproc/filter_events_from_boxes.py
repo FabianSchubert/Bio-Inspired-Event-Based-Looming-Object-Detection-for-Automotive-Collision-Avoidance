@@ -3,10 +3,10 @@ import numpy as np
 from glob import glob
 import os
 
-from src.prophesee_automotive_dataset_toolbox.src.io.psee_loader import PSEELoader
+from prophesee_dataset_toolbox.io.psee_loader import PSEELoader
 from src.utils import compare_boxes_patches, iou, crop_factor, group_boxes_by_ts
 
-from config import BOXES_DTYPE
+from src.config import BOXES_DTYPE
 
 from typing import Callable
 

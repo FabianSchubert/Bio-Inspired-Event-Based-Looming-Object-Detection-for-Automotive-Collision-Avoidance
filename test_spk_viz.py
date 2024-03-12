@@ -3,8 +3,8 @@ import matplotlib.pyplot as plt
 import matplotlib.patches as patches
 
 from src.classifier.data_io import load_file
-import config
-from src.default_settings import p
+import src.config as config
+from src.lgmd_sim.default_settings import p
 
 import os
 

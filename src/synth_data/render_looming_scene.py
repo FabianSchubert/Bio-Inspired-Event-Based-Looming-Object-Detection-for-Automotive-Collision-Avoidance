@@ -24,6 +24,7 @@ def set_up_looming_scene(
     cam_fov_deg: float = 45.0,
     num_threads: int = -1,  # number of threads to be used by the renderer. -1 means automatic,
     device: str = "CPU",
+    renderer: str = "CYCLES",
 ):
     if not render_output_dir.endswith("/"):
         render_output_dir += "/"
@@ -52,7 +53,7 @@ def set_up_looming_scene(
 
     scene.render.filepath = render_output_dir
     scene.render.image_settings.file_format = "PNG"
-    scene.render.engine = "CYCLES"
+    scene.render.engine = renderer
     scene.cycles.device = device_mode[device].name
 
     scene.cycles.samples = 10  # less means more grain and stepped edges.
@@ -139,6 +140,7 @@ def render_looming_scene(
     num_threads: int = -1,  # number of threads to be used by the renderer. -1 means automatic
     device: str = "CPU",
     force_overwrite: bool = False,
+    renderer: str = "CYCLES",
 ) -> None:
     fps = int(fps)
     n_frames = int(t_video * fps)
@@ -166,7 +168,9 @@ def render_looming_scene(
             print("Info: Overwriting files in render output folder.")
         else:
             while True:
-                resp = input("Frame folder not empty! Continue overwriting? [y/n] ").lower()
+                resp = input(
+                    "Frame folder not empty! Continue overwriting? [y/n] "
+                ).lower()
                 if resp in ["y", "n"]:
                     if resp == "y":
                         break
@@ -194,6 +198,7 @@ def render_looming_scene(
         cam_fov_deg,
         num_threads=num_threads,
         device=device,
+        renderer=renderer,
     )
 
     bpy.ops.render.render(animation=True)
