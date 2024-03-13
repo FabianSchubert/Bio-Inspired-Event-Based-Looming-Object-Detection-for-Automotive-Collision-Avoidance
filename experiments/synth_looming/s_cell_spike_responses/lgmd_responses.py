@@ -1,6 +1,6 @@
 from src.lgmd_sim.simulator_LGMD import LGMD_model
 
-from src.lgmd_sim.default_settings import params as default_params
+from .network_settings import params
 
 from src.viz import play_event_anim, play_var_anim
 
@@ -12,13 +12,6 @@ import numpy as np
 
 import os
 
-
-params = dict(default_params)
-
-params["N_SUBDIV_X"] = 1
-params["N_SUBDIV_Y"] = 1
-
-params["INPUT_EVENT_CURRENT"] = 15.0
 
 VEL_MPS = [
     0.5,
@@ -37,14 +30,14 @@ OBJECTS = [
     "disc_rand_struct_bright",
 ]
 
-BACKGROUNDS = ["gray_bg"]
+BACKGROUNDS = ["gray_bg", "cloudy_bg"]
 
 REC_DT = 10.0
 
-base_fold = os.path.join(os.path.dirname(__file__), "../../data/synthetic/")
+base_fold = os.path.join(os.path.dirname(__file__), "../../../data/synthetic/")
 
 base_fold_results = os.path.join(
-    os.path.dirname(__file__), "../../data/experiments/synth_looming/s_cell_spike_responses/"
+    os.path.dirname(__file__), "../../../data/experiments/synth_looming/s_cell_spike_responses/"
 )
 
 lgmd_network = LGMD_model(params)
@@ -99,7 +92,7 @@ for vel, obj, bg in product(VEL_MPS, OBJECTS, BACKGROUNDS):
         rec_n_t=rec_n_t,
     )
 
-    # """
+    """
 
     play_var_anim(
         vs,

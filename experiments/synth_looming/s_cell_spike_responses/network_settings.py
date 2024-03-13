@@ -39,7 +39,7 @@ params = {
     "SYN_DELAY_IN_LGMD": int(50),
     # P settings
     "MAX_INPUT_SPIKES": 100000000,
-    "INPUT_EVENT_CURRENT": 5,
+    "INPUT_EVENT_CURRENT": 15.,
     "TAU_MEM_P": 50.0,
     "V_THRESH_P": 0.1,
     "V_RESET_P": 0.0,
