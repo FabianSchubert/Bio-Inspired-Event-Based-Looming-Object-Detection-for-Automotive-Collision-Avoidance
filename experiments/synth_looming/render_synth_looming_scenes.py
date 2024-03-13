@@ -28,7 +28,7 @@ NUM_CPU_THREADS = 6
 DEVICE = "GPU"
 RENDERER = "CYCLES"
 
-base_fold = os.path.join(os.path.dirname(__file__), "data/synthetic/")
+base_fold = os.path.join(os.path.dirname(__file__), "../../data/synthetic/")
 
 for vel, obj_f, bg_f in product(VEL_MPS, OBJECT_FILES, BACKGROUND_FILES):
     obj_name = os.path.basename(obj_f).split(".blend")[0]
