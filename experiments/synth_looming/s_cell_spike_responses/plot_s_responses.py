@@ -9,9 +9,9 @@ import os
 
 from itertools import product
 
-#plt.style.use(
+# plt.style.use(
 #    "https://github.com/FabianSchubert/mpl_style/raw/main/custom_style.mplstyle"
-#)
+# )
 
 base_fold = os.path.join(
     os.path.dirname(__file__),
@@ -27,10 +27,10 @@ clm = {
 }
 
 OBJ_D = 1.5
-WIDTH = 304.
-VIEW_ANGLE = 45.
+WIDTH = 304.0
+VIEW_ANGLE = 45.0
 
-FOC_L = WIDTH / (2.*np.tan(VIEW_ANGLE * np.pi / 360.))
+FOC_L = WIDTH / (2.0 * np.tan(VIEW_ANGLE * np.pi / 360.0))
 
 evt_count = pd.DataFrame(columns=clm.values())
 
@@ -74,10 +74,10 @@ evt_grouped_avg = evt_count.groupby(["t", clm["vel"], clm["obj"], clm["bg"]]).me
 
 evt_count_avg = evt_grouped_avg.reset_index()
 evt_count_avg["Object Screen Size"] = (OBJ_D * FOC_L) / (
-    evt_count_avg[clm["vel"]] * (10. - evt_count_avg["t"]/1000.)
+    evt_count_avg[clm["vel"]] * (10.0 - evt_count_avg["t"] / 1000.0)
 )
 evt_count_avg["Screen Exp. Rate"] = (OBJ_D * FOC_L) / (
-    evt_count_avg[clm["vel"]] * (1.0 - evt_count_avg["t"]/1000.) ** 2.0
+    evt_count_avg[clm["vel"]] * (1.0 - evt_count_avg["t"] / 1000.0) ** 2.0
 )
 
 evt_count_avg["Event Count / Velocity"] = (
@@ -91,7 +91,11 @@ peak_count = evt_count_avg.loc[
 
 prod_obj_bg = list(product(objects, backgrounds))
 
-fig, ax = plt.subplots(int(np.ceil(len(prod_obj_bg) / 2)), 2, figsize=(7, 3 * int(np.ceil(len(prod_obj_bg) / 2))))
+fig, ax = plt.subplots(
+    int(np.ceil(len(prod_obj_bg) / 2)),
+    2,
+    figsize=(7, 3 * int(np.ceil(len(prod_obj_bg) / 2))),
+)
 
 
 for k, (obj, bg) in enumerate(prod_obj_bg):
@@ -99,13 +103,19 @@ for k, (obj, bg) in enumerate(prod_obj_bg):
 
     sns.lineplot(
         data=evt_count_avg[
-            (evt_count_avg[clm["obj"]] == obj) & (evt_count_avg[clm["bg"]] == bg)
+            (
+                (evt_count_avg[clm["obj"]] == obj)
+                & (evt_count_avg[clm["bg"]] == bg)
+                & (evt_count_avg["Object Screen Size"] < 1000.0)
+            )
         ],
-        x="t",
+        x="Object Screen Size",
         y="Event Count / Velocity",
         hue=clm["vel"],
         ax=ax[k // 2, k % 2],
     )
+
+    _ax.set_xlim([0.0, 1000.0])
 
     _ax.set_title(f"{obj} on {bg}")
 
