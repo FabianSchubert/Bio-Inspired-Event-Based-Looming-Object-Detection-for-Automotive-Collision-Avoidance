@@ -1,69 +1,45 @@
 import numpy as np
+from src.utils import FixedDict
 import os
 from skimage.io import imread
 
-DT = 1.0
+kern_w = 21
 
-kernel_g = (
-    imread(os.path.join(os.path.dirname(__file__), "kernel_g.png")).mean(axis=2) / 255.0
-)
-
-KERNEL_HEIGHT, KERNEL_WIDTH = kernel_g.shape
+x, y = np.meshgrid(np.arange(kern_w)-kern_w//2, np.arange(kern_w)-kern_w//2)
+kernel_s_t = np.exp(-(x**2. + y**2.)/(2.*(kern_w/(5.))**2.))
 
 params = {
-    # general settings
-    "NAME": "s cell spike response",
-    "OUT_DIR": ".",
+    "NAME": "X_Y_model",
+    "CUDA_VISIBLE_DEVICES": False,
+    "DT_MS": 1.0,
+    "TIMING": False,
+    "N_BATCH": 1,
+    "MODEL_SEED": None,
+    "REC_SPIKES": ["P", "S", "OUT"],
     "INPUT_WIDTH": 304,
     "INPUT_HEIGHT": 240,
     "N_SUBDIV_X": 1,
     "N_SUBDIV_Y": 1,
     "HALF_STEP_TILES": True,
-    # S kernel settings
-    "KERNEL_WIDTH": KERNEL_WIDTH,  # inhibition kernel width; needs to be ODD
-    "KERNEL_HEIGHT": KERNEL_HEIGHT,  # inhibition kernel height; needs to be ODD
-    "KERNEL_G": -kernel_g.flatten(),
-    "SCALE_KERNEL_G": 1.0,
-    "KERNEL_D": np.ones((25), dtype="int"),
-    "SCALE_KERNEL_D": 200.0,
-    # P to S settings
-    "TAU_SYN_IN_S_I": 150.0,
-    "TAU_SYN_IN_S_E": 150.0,
-    "W_IN_S_E": 0.25,
-    # S to LGMD settings
-    "W_S_LGMD": 0.02,  # 0.04,
-    # P to LGMD settings
-    "W_IN_LGMD": -0.5,  # -0.04,
-    "TAU_IN_LGMD": 50.0,
-    "THRESH_IN_LGMD": 200.0,
-    "SYN_DELAY_IN_LGMD": int(50),
-    # P settings
-    "MAX_INPUT_SPIKES": 100000000,
-    "INPUT_EVENT_CURRENT": 15.,
+    #
     "TAU_MEM_P": 50.0,
     "V_THRESH_P": 0.1,
     "V_RESET_P": 0.0,
-    # S settings
-    "TAU_MEM_S": 50.0,
-    "V_THRESH_S": 5.0,
-    "V_RESET_S": 0.0,
-    # LGMD settings
-    "TAU_MEM_LGMD": 20.0,
-    "V_THRESH_LGMD": 1.0,
-    "V_RESET_LGMD": 0.0,
-    # simulation settings
-    "DT_MS": 1.0,
-    "TRIAL_MS": 10000.0,
-    "T_START_MS": 0.0,
-    "TIMING": False,
-    "MODEL_SEED": None,
-    "N_BATCH": 1,
-    "CUDA_VISIBLE_DEVICES": False,
-    # recording settings
-    "REC_SPIKES": ["P", "S", "LGMD"],
-    "REC_NEURONS": [("P", "V"), ("S", "V"), ("LGMD", "V")],
-    "REC_SYNAPSES": [],  # ("in_S_I","in_syn")],
+    "INPUT_EVENT_CURRENT": 5.0,
+    #
+    "P_S_T_KERNEL": kernel_s_t,
+    #
+    "TAU_MEM_S": 100.0,
+    "TAU_FILT_S": 10.0,
+    "B_REG_S": 1e-8,
+    "S_POS_NORM_REG": 1e0,
+    #
+    "TAU_MEM_OUT": 5.0,
+    "G_FILT_BIAS_OUT": 1e-11,
+    "G_FILT_SCALE_OUT": 1e-11,
 }
 
-params["SPK_REC_STEPS"] = int(params["TRIAL_MS"] / params["DT_MS"])
-params["NT_MAX"] = int(params["TRIAL_MS"] / params["DT_MS"])
+params["NT_MAX"] = int(10000./params["DT_MS"])
+params["SPK_REC_STEPS"] = params["NT_MAX"]
+
+params = FixedDict(params)

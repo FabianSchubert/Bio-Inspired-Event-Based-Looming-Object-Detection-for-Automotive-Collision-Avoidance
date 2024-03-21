@@ -7,8 +7,9 @@ from pygenn.genn_wrapper import NO_DELAY
 from .models import (
     bitmask_array_current_source,
     lif_neuron,
-    one_one_with_boundary,
-    threshold_exp_curr,
+    s_neuron,
+    out_neuron,
+    cont_wu,
 )
 
 from .format_spike_data import (
@@ -103,26 +104,70 @@ class LGMD_model:
 
         self.input_inivars = {"nt": self.nt_max, "pop_size": self.n_input}
 
-        # S neurons
-        half_wd = (p["KERNEL_WIDTH"] - 1) // 2  # kernel widths need to be odd
-        half_ht = (p["KERNEL_HEIGHT"] - 1) // 2  # kernel heights need to be odd
-        self.S_width = self.tile_width - 2 * half_wd
-        self.S_height = self.tile_height - 2 * half_ht
-        self.n_S = (self.S_width) * (self.S_height)
-        S_params = {
+        self.P_S_t_kernel = p["P_S_T_KERNEL"]
+        self.kernel_height, self.kernel_width = self.P_S_t_kernel.shape
+
+        assert self.kernel_height % 2 != 0, "kernel height must be uneven"
+        assert self.kernel_width % 2 != 0, "kernel width must be uneven"
+
+        # just to make sure it's normalised
+        self.P_S_t_kernel /= self.P_S_t_kernel.sum()
+
+        self.P_S_t_inivars = {"g": self.P_S_t_kernel.flatten()}
+
+        # x derivative by shifting left and right.
+        self.P_S_x_kernel = np.zeros(self.P_S_t_kernel.shape)
+        self.P_S_x_kernel[:, 1:] += self.P_S_t_kernel[:, :-1] / 2.0
+        self.P_S_x_kernel[:, :-1] -= self.P_S_t_kernel[:, 1:] / 2.0
+
+        self.P_S_x_inivars = {"g": self.P_S_x_kernel.flatten()}
+
+        # same for y
+        self.P_S_y_kernel = np.zeros(self.P_S_t_kernel.shape)
+        self.P_S_y_kernel[1:, :] += self.P_S_t_kernel[:-1, :] / 2.0
+        self.P_S_y_kernel[:-1, :] -= self.P_S_t_kernel[1:, :] / 2.0
+
+        self.P_S_y_inivars = {"g": self.P_S_y_kernel.flatten()}
+
+        self.kernel_half_width = (self.kernel_width - 1) // 2
+        self.kernel_half_height = (self.kernel_height - 1) // 2
+
+        self.S_width = self.tile_width - 2 * self.kernel_half_width
+        self.S_height = self.tile_height - 2 * self.kernel_half_height
+
+        self.n_S = self.S_width * self.S_height
+
+        self.S_OUT_left_weights = np.zeros((self.S_height, self.S_width, 1))
+        self.S_OUT_left_weights[:, : self.S_width // 2] = 1.0 / (
+            self.S_height * (self.S_width // 2)
+        )
+        self.S_OUT_left_weights = np.reshape(self.S_OUT_left_weights, (self.n_S, 1))
+
+        self.S_OUT_right_weights = np.zeros((self.S_height, self.S_width, 1))
+        self.S_OUT_right_weights[:, self.S_width // 2 :] = 1.0 / (
+            self.S_height * (self.S_width - self.S_width // 2)
+        )
+        self.S_OUT_right_weights = np.reshape(self.S_OUT_right_weights, (self.n_S, 1))
+
+        self.S_params = {
             "tau_m": p["TAU_MEM_S"],
-            "V_thresh": p["V_THRESH_S"],
-            "V_reset": p["V_RESET_S"],
+            "tau_filt": p["TAU_FILT_S"],
+            "b_reg": p["B_REG_S"],
         }
-        self.S_inivars = {"V": 0.0, "VI": 0.0}
+        self.S_inivars = {"Vx": 0.0, "Vy": 0.0, "Vt": 0.0, "It_prev": 0.0, "V": 0.0}
+
+        xs, ys = np.meshgrid(np.arange(self.S_width)-self.S_width//2, np.arange(self.S_height) - self.S_height//2)
+        psnorm = xs**2. + ys**2.
+        xsnorm = xs / (psnorm + p["S_POS_NORM_REG"])
+        ysnorm = ys / (psnorm + p["S_POS_NORM_REG"])
 
         # LGMD neuron
-        LGMD_params = {
-            "tau_m": p["TAU_MEM_LGMD"],
-            "V_thresh": p["V_THRESH_LGMD"],
-            "V_reset": p["V_RESET_LGMD"],
+        self.OUT_params = {
+            "tau_m": p["TAU_MEM_OUT"],
+            "g_filt_bias": p["G_FILT_BIAS_OUT"],
+            "g_filt_scale": p["G_FILT_SCALE_OUT"],
         }
-        self.LGMD_inivars = {"V": 0.0, "VI": 0.0}
+        self.OUT_inivars = {"S_left": 0.0, "S_right": 0.0, "V_est": 0.0}
 
         """
         ---------------------------------------------------------------------------
@@ -130,23 +175,9 @@ class LGMD_model:
         ----------------------------------------------------------------------------
         """
 
-        # excitatory input to S
-        iniconn_params = {
-            "in_ht": p["INPUT_HEIGHT"],
-            "in_wd": p["INPUT_WIDTH"],
-            "out_yoff": p["KERNEL_HEIGHT"] // 2,
-            "out_xoff": p["KERNEL_WIDTH"] // 2,
-        }
-
-        # inhibitory input to S
-        self.in_S_I_inivars = {
-            "g": p["KERNEL_G"] * p["SCALE_KERNEL_G"],
-            "d": (p["KERNEL_D"] * p["SCALE_KERNEL_D"]).astype("int"),
-        }
-
         self.I_kernel_params = {
-            "conv_kh": p["KERNEL_HEIGHT"],
-            "conv_kw": p["KERNEL_WIDTH"],
+            "conv_kh": self.kernel_height,
+            "conv_kw": self.kernel_width,
             "conv_ih": p["INPUT_HEIGHT"],
             "conv_iw": p["INPUT_WIDTH"],
             "conv_ic": 1,
@@ -155,25 +186,20 @@ class LGMD_model:
             "conv_oc": 1,
         }
 
-        self.in_S_I_iniconn = genn_model.init_toeplitz_connectivity(
+        self.P_S_iniconn = genn_model.init_toeplitz_connectivity(
             "Conv2D", self.I_kernel_params
         )
-
-        # input to LGMD inhibition (subsuming F neuron)
-        in_LGMD_params = {
-            "tau": p["TAU_IN_LGMD"],
-            "threshold": p["THRESH_IN_LGMD"],
-        }
 
         self.P = []
         self.input = []
         self.S = []
-        self.LGMD = []
+        self.OUT = []
 
-        self.in_S_E = []
-        self.in_S_I = []
-        self.S_LGMD = []
-        self.in_LGMD = []
+        self.P_S_x = []
+        self.P_S_y = []
+        self.P_S_t = []
+        self.S_OUT_left = []
+        self.S_OUT_right = []
 
         for k in range(self.n_tiles_y):
             for l in range(self.n_tiles_x):
@@ -223,72 +249,94 @@ class LGMD_model:
 
                 self.S.append(
                     self.model.add_neuron_population(
-                        f"S_{k}_{l}", self.n_S, lif_neuron, S_params, self.S_inivars
+                        f"S_{k}_{l}", self.n_S, s_neuron, self.S_params, self.S_inivars
                     )
                 )
+
+                self.S[-1].set_extra_global_param("xnorm", xsnorm.flatten())
+                self.S[-1].set_extra_global_param("ynorm", ysnorm.flatten())
 
                 # neuron populations
 
-                self.LGMD.append(
+                self.OUT.append(
                     self.model.add_neuron_population(
-                        f"LGMD_{k}_{l}", 1, lif_neuron, LGMD_params, self.LGMD_inivars
+                        f"OUT_{k}_{l}", 1, out_neuron, self.OUT_params, self.OUT_inivars
                     )
                 )
 
-                self.in_S_E.append(
+                self.P_S_x.append(
                     self.model.add_synapse_population(
-                        f"in_S_E_{k}_{l}",
-                        "SPARSE_GLOBALG",
-                        NO_DELAY,
-                        self.P[-1],
-                        self.S[-1],
-                        "StaticPulse",
-                        {},
-                        {"g": p["W_IN_S_E"]},
-                        {},
-                        {},
-                        "ExpCurr",
-                        {"tau": p["TAU_SYN_IN_S_E"]},
-                        {},
-                        genn_model.init_connectivity(
-                            one_one_with_boundary, iniconn_params
-                        ),
-                    )
-                )
-
-                self.in_S_I.append(
-                    self.model.add_synapse_population(
-                        f"in_S_I_{k}_{l}",
+                        f"P_S_x_{k}_{l}",
                         "TOEPLITZ_KERNELG",
                         NO_DELAY,
                         self.P[-1],
                         self.S[-1],
-                        "StaticPulseDendriticDelay",
+                        "StaticPulse",
                         {},
-                        self.in_S_I_inivars,
+                        self.P_S_x_inivars,
                         {},
                         {},
-                        "ExpCurr",
-                        {"tau": p["TAU_SYN_IN_S_I"]},
+                        "DeltaCurr",
                         {},
-                        self.in_S_I_iniconn,
+                        {},
+                        self.P_S_iniconn,
                     )
                 )
 
-                self.in_S_I[-1].pop.set_max_dendritic_delay_timesteps(
-                    int(self.in_S_I_inivars["d"].max() + 1)
+                self.P_S_x[-1].ps_target_var = "Isyn_x"
+
+                self.P_S_y.append(
+                    self.model.add_synapse_population(
+                        f"P_S_y_{k}_{l}",
+                        "TOEPLITZ_KERNELG",
+                        NO_DELAY,
+                        self.P[-1],
+                        self.S[-1],
+                        "StaticPulse",
+                        {},
+                        self.P_S_y_inivars,
+                        {},
+                        {},
+                        "DeltaCurr",
+                        {},
+                        {},
+                        self.P_S_iniconn,
+                    )
                 )
 
-                self.S_LGMD.append(
+                self.P_S_y[-1].ps_target_var = "Isyn_y"
+
+                self.P_S_t.append(
                     self.model.add_synapse_population(
-                        f"S_LGMD_{k}_{l}",
+                        f"P_S_t_{k}_{l}",
+                        "TOEPLITZ_KERNELG",
+                        NO_DELAY,
+                        self.P[-1],
+                        self.S[-1],
+                        "StaticPulse",
+                        {},
+                        self.P_S_t_inivars,
+                        {},
+                        {},
+                        "DeltaCurr",
+                        {},
+                        {},
+                        self.P_S_iniconn,
+                    )
+                )
+
+                self.P_S_t[-1].ps_target_var = "Isyn_t"
+
+                self.S_OUT_left.append(
+                    self.model.add_synapse_population(
+                        f"S_OUT_left_{k}_{l}",
                         "DENSE_INDIVIDUALG",
                         NO_DELAY,
                         self.S[-1],
-                        self.LGMD[-1],
-                        "StaticPulse",
+                        self.OUT[-1],
+                        cont_wu,
                         {},
-                        {"g": p["W_S_LGMD"]},
+                        {"g": self.S_OUT_left_weights.flatten()},
                         {},
                         {},
                         "DeltaCurr",
@@ -297,23 +345,27 @@ class LGMD_model:
                     )
                 )
 
-                self.in_LGMD.append(
+                self.S_OUT_left[-1].ps_target_var = "Isyn_left"
+
+                self.S_OUT_right.append(
                     self.model.add_synapse_population(
-                        f"in_LGMD_{k}_{l}",
+                        f"S_OUT_right_{k}_{l}",
                         "DENSE_INDIVIDUALG",
-                        int(p["SYN_DELAY_IN_LGMD"]),
-                        self.P[-1],
-                        self.LGMD[-1],
-                        "StaticPulse",
+                        NO_DELAY,
+                        self.S[-1],
+                        self.OUT[-1],
+                        cont_wu,
                         {},
-                        {"g": p["W_IN_LGMD"]},
+                        {"g": self.S_OUT_right_weights.flatten()},
                         {},
                         {},
-                        threshold_exp_curr,
-                        in_LGMD_params,
+                        "DeltaCurr",
+                        {},
                         {},
                     )
                 )
+
+                self.S_OUT_right[-1].ps_target_var = "Isyn_right"
 
                 for pop in self.rec_spikes:
                     self.model.neuron_populations[

@@ -1,5 +1,4 @@
 from pygenn import genn_model
-import numpy as np
 
 # curent source model for current input based on DVS events passed as a spike_array
 spike_array_current_source = genn_model.create_custom_current_source_class(
@@ -62,68 +61,54 @@ lif_neuron = genn_model.create_custom_neuron_class(
 
 s_neuron = genn_model.create_custom_neuron_class(
     "S",
-    param_names=["tau_m", "V_thresh", "V_reset"],
+    param_names=["tau_m", "tau_filt", "b_reg"],
     var_name_types=[
-        ("VI", "scalar"),
-        ("VE", "scalar"),
+        ("Vx", "scalar"),
+        ("Vy", "scalar"),
+        ("Vt", "scalar"),
+        ("It_prev", "scalar"),
         ("V", "scalar"),
-        ("I", "scalar"),
     ],
     sim_code="""
-    $(VI) = min(1.0, $(Isyn_I));
-    $(VE) = $(Isyn_E);
+    $(Vx) += DT * ($(Isyn_x) - $(Vx)) / $(tau_filt);
+    $(Vy) += DT * ($(Isyn_y) - $(Vy)) / $(tau_filt);
+    $(Vt) += DT * (($(Isyn_t) - $(It_prev))/DT - $(Vt)) / $(tau_filt);
 
-    $(I) = $(VE) * (1.0 - $(VI));
+    $(It_prev) = $(Isyn_t);
 
-    $(V) += ($(I) - $(V)) / $(tau_m) * DT;
+    const scalar v_proj = $(xnorm)[$(id)] * $(Vx) + $(ynorm)[$(id)] * $(Vy);
+
+    const scalar g_est = -v_proj * $(Vt) / ($(b_reg) + v_proj * v_proj);
+
+    $(V) += DT * (g_est - $(V)) / $(tau_m);
     """,
-    threshold_condition_code="$(V) >= $(V_thresh)",
-    reset_code="""
-    $(V)-= $(V_reset);  // soft reset by $(V_reset)
-    """,
+    extra_global_params=[("xnorm", "scalar*"), ("ynorm", "scalar*")],
+    additional_input_vars=[
+        ("Isyn_x", "scalar", 0.0),
+        ("Isyn_y", "scalar", 0.0),
+        ("Isyn_t", "scalar", 0.0),
+    ],
     is_auto_refractory_required=False,
 )
 
-# connectivity initialisation snippet for 1:1 connectivity between input and S
-one_one_with_boundary = genn_model.create_custom_sparse_connect_init_snippet_class(
-    "one_one_with_boundary",
-    # assume out < in and out centered on in
-    param_names=["in_ht", "in_wd", "out_yoff", "out_xoff"],
-    row_build_code="""
-        const int in_x= $(id_pre)%((int) $(in_wd));
-        const int in_y= $(id_pre)/((int) $(in_wd));
-        const int out_wd= ((int) $(in_wd))-2*((int) $(out_xoff)); 
-        const int out_ht= ((int) $(in_ht))-2*((int) $(out_yoff)); 
-        const int out_x= in_x-((int) $(out_xoff));
-        if ((out_x >= 0) && (out_x < out_wd)) {
-            const int out_y= in_y-((int) $(out_yoff));
-            if ((out_y >= 0) && (out_y < out_ht)) {
-                $(addSynapse, (out_y*out_wd+out_x));
-            }
-        }
-        $(endRow);
-        """,
-    calc_max_row_len_func=genn_model.create_cmlf_class(
-        lambda num_pre, num_post, pars: 1
-    )(),
+out_neuron = genn_model.create_custom_neuron_class(
+    "OUT",
+    param_names=["tau_m", "g_filt_bias", "g_filt_scale"],
+    var_name_types=[("S_left", "scalar"), ("S_right", "scalar"), ("V_est", "scalar")],
+    sim_code="""
+   $(S_left) = $(Isyn_left);
+   $(S_right) = $(Isyn_right);
+   const scalar g_filt_left = 1./(1.+exp(-4.*($(S_left)-$(g_filt_bias))/$(g_filt_scale)));
+   const scalar g_filt_right = 1./(1.+exp(-4.*($(S_right)-$(g_filt_bias))/$(g_filt_scale)));
+
+   $(V_est) += DT * (g_filt_left * g_filt_right * 0.5 * ($(S_left) + $(S_right)) - $(V_est)) / $(tau_m);
+   """,
+    additional_input_vars=[("Isyn_left", "scalar", 0.0), ("Isyn_right", "scalar", 0.0)],
 )
 
-# postsynaptic model to emulate the thresholded linear unit F action on LGMD
-threshold_exp_curr = genn_model.create_custom_postsynaptic_class(
-    "threshold_exp_curr",
-    param_names=["tau", "threshold"],
-    derived_params=[
-        (
-            "expDecay",
-            genn_model.create_dpf_class(lambda pars, dt: np.exp(-dt / pars[0]))(),
-        ),
-        (
-            "init",
-            genn_model.create_dpf_class(
-                lambda pars, dt: (pars[0] * (1.0 - np.exp(-dt / pars[0]))) * (1.0 / dt)
-            )(),
-        ),
-    ],
-    decay_code="$(inSyn)*= $(expDecay);",
-    apply_input_code="if ($(init)*$(inSyn) < -$(threshold)) $(Isyn)+= $(init)*$(inSyn);",
+cont_wu = genn_model.create_custom_weight_update_class(
+    "cont_wu",
+    param_names=[],
+    var_name_types=[("g", "scalar")],
+    synapse_dynamics_code="$(addToInSyn, $(g) * $(V_pre));"
 )
