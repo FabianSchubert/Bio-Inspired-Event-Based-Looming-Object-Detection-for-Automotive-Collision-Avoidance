@@ -52,7 +52,7 @@ base_fold = os.path.join(os.path.dirname(__file__), "../../../data/synthetic/")
 
 base_fold_results = os.path.join(
     os.path.dirname(__file__),
-    "../../../data/experiments/synth_looming/s_cell_spike_responses/",
+    "../../../data/experiments/synth_looming/s_cell_spike_responses/x_y_smooth/",
 )
 
 lgmd_network = LGMD_model(params)
