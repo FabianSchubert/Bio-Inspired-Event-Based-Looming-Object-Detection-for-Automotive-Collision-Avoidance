@@ -28,9 +28,10 @@ params = {
     "INPUT_EVENT_CURRENT": 5.0,
     #
     "P_S_T_KERNEL": kernel_s_t,
+    "TAU_PS_KERNEL": 50.0,
     #
     "TAU_MEM_S": 100.0,
-    "TAU_FILT_S": 10.0,
+    "TAU_FILT_S": 100.0,
     "B_REG_S": 1e-8,
     "S_POS_NORM_REG": 1e0,
     #

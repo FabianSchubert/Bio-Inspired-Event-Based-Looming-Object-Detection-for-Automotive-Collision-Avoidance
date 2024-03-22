@@ -16,24 +16,24 @@ import matplotlib.pyplot as plt
 
 
 VEL_MPS = [
-    # 0.5,
+    0.5,
     1.0,
-    # 1.5,
-    # 2.0,
-    # 2.5,
-    # 3.0,
+    1.5,
+    2.0,
+    2.5,
+    3.0,
 ]
 
 OBJECTS = [
-    # "disc_bright",
-    # "disc_dark",
-    # "square_bright",
-    # "square_dark",
+    "disc_bright",
+    "disc_dark",
+    "square_bright",
+    "square_dark",
     "disc_rand_struct_bright",
 ]
 
 BACKGROUNDS = [
-    #"gray_bg",
+    "gray_bg",
     "cloudy_bg"]
 
 REC_DT = 10.0
@@ -117,7 +117,7 @@ for vel, obj, bg in product(VEL_MPS, OBJECTS, BACKGROUNDS):
         rec_n_t=rec_n_t,
     )
 
-    # """
+    """
 
     play_var_anim(
         vs,

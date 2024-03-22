@@ -190,6 +190,8 @@ class LGMD_model:
             "Conv2D", self.I_kernel_params
         )
 
+        self.P_S_ps_params = {"tau": p["TAU_PS_KERNEL"]}
+
         self.P = []
         self.input = []
         self.S = []
