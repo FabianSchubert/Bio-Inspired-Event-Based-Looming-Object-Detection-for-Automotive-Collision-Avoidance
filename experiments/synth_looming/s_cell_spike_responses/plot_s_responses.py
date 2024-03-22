@@ -15,12 +15,14 @@ from itertools import product
 
 base_fold = os.path.join(
     os.path.dirname(__file__),
-    "../../../data/experiments/synth_looming/s_cell_spike_responses",
+    "../../../data/experiments/synth_looming/s_cell_spike_responses/x_y_smooth/",
 )
 
 clm = {
     "t": "t",
-    "count": "Event Count",
+    "vout": "Output Voltage",
+    "vs": "S Voltage",
+    # "count": "Event Count",
     "vel": "Velocity",
     "obj": "Object",
     "bg": "Background",
@@ -32,7 +34,7 @@ VIEW_ANGLE = 45.0
 
 FOC_L = WIDTH / (2.0 * np.tan(VIEW_ANGLE * np.pi / 360.0))
 
-evt_count = pd.DataFrame(columns=clm.values())
+data = pd.DataFrame(columns=clm.values())
 
 for res_fold in os.listdir(base_fold):
     vel = float(res_fold.split("_mps")[0][-3:])
@@ -46,48 +48,44 @@ for res_fold in os.listdir(base_fold):
     res = np.load(os.path.join(base_fold, res_fold, "results.npz"))
 
     vs = res["vs"]
-    s_spikes = res["evts_s"]
+    vout = res["vout"]
+    t = res["rec_n_t"]
 
-    df_s = pd.DataFrame(s_spikes)
+    _data = pd.DataFrame()
 
-    _evt_count = df_s.groupby("t").sum()
-    _evt_count = _evt_count.sort_index()
-    _evt_count = _evt_count[_evt_count["p"] < 50000.0]
-    _evt_count[clm["t"]] = _evt_count.index
-    _evt_count[clm["count"]] = _evt_count["p"]
-    _evt_count[clm["vel"]] = vel
-    _evt_count[clm["obj"]] = obj
-    _evt_count[clm["bg"]] = bg
-    _evt_count.drop(labels=["x", "y", "p"], axis=1, inplace=True)
+    #_data[clm["vs"]] = np.percentile(vs, 99., axis=(1,2))
+    _data[clm["vs"]] = np.tanh(((vs > 0.0005).sum(axis=(1,2)) - 5000.)/500.)
+    #_data[clm["vs"]] = ((vs > 0.0005) * vs).sum(axis=(1,2)) /(1. + (vs > 0.0005).sum(axis=(1,2)))
+    #_data[clm["vs"]] = ((np.abs(vs) > 0.0001) * vs).sum(axis=(1,2))/(10000. + (np.abs(vs) > 0.0001).sum(axis=(1,2)))
+    #vth = (vs > 0.00033)
+    #_data[clm["vs"]] = (vth.sum(axis=(1,2)) > 10000.) # * (vth * vs).sum(axis=(1,2)) / vth.sum(axis=(1,2))
+    #_data[clm["vs"]] = np.tanh(((vs > 0.00033).sum(axis=(1,2)) - 5000.)/1000.)
+    #_data[clm["vs"]] = vout
+    _data[clm["vout"]] = vout
+    _data[clm["t"]] = t
 
-    evt_count = pd.concat([evt_count, _evt_count], ignore_index=True)
+    _data[clm["vel"]] = vel
+    _data[clm["obj"]] = obj
+    _data[clm["bg"]] = bg
+
+    data = pd.concat([data, _data], ignore_index=True)
 
 
-objects = evt_count[clm["obj"]].unique()
-backgrounds = evt_count[clm["bg"]].unique()
+objects = data[clm["obj"]].unique()
+backgrounds = data[clm["bg"]].unique()
 
-evt_count["t"] = evt_count["t"].astype("float")
-evt_count[clm["count"]] = evt_count[clm["count"]].astype("float")
-evt_count["t"] = 10.0 * (evt_count["t"] // 10.0)
+data["t"] = data["t"].astype("float")
 
-evt_grouped_avg = evt_count.groupby(["t", clm["vel"], clm["obj"], clm["bg"]]).mean()
-
-evt_count_avg = evt_grouped_avg.reset_index()
-evt_count_avg["Object Screen Size"] = (OBJ_D * FOC_L) / (
-    evt_count_avg[clm["vel"]] * (10.0 - evt_count_avg["t"] / 1000.0)
+data["Object Screen Size"] = (OBJ_D * FOC_L) / (
+    data[clm["vel"]] * (10.0 - data["t"] / 1000.0)
 )
-evt_count_avg["Screen Exp. Rate"] = (OBJ_D * FOC_L) / (
-    evt_count_avg[clm["vel"]] * (1.0 - evt_count_avg["t"] / 1000.0) ** 2.0
-)
-
-evt_count_avg["Event Count / Velocity"] = (
-    evt_count_avg[clm["count"]] / evt_count_avg[clm["vel"]]
+data["Screen Exp. Rate"] = (OBJ_D * FOC_L) / (
+    data[clm["vel"]] * (10.0 - data["t"] / 1000.0) ** 2.0
 )
 
+data["Output Voltage / Velocity"] = data[clm["vout"]] / data[clm["vel"]]
 
-peak_count = evt_count_avg.loc[
-    evt_count_avg.groupby([clm["vel"], clm["obj"]]).idxmax()[clm["count"]]
-]
+peak_vout = data.loc[data.groupby([clm["vel"], clm["obj"]]).idxmax()[clm["vout"]]]
 
 prod_obj_bg = list(product(objects, backgrounds))
 
@@ -102,25 +100,28 @@ for k, (obj, bg) in enumerate(prod_obj_bg):
     _ax = ax[k // 2, k % 2]
 
     sns.lineplot(
-        data=evt_count_avg[
+        data=data[
             (
-                (evt_count_avg[clm["obj"]] == obj)
-                & (evt_count_avg[clm["bg"]] == bg)
-                & (evt_count_avg["Object Screen Size"] < 1000.0)
+                (data[clm["obj"]] == obj)
+                & (data[clm["bg"]] == bg)
+                & (data["t"] > 2000.0)
             )
         ],
-        x="Object Screen Size",
-        y="Event Count / Velocity",
+        x="t",
+        y="S Voltage",
         hue=clm["vel"],
         ax=ax[k // 2, k % 2],
     )
 
-    _ax.set_xlim([0.0, 1000.0])
+    #_ax.set_xlim([0.0, 1000.0])
 
     _ax.set_title(f"{obj} on {bg}")
 
 fig.tight_layout(pad=0.1)
 
-fig.savefig(os.path.join(os.path.dirname(__file__), "results/s_responses.png"), dpi=500)
+fig.savefig(
+    os.path.join(os.path.dirname(__file__), "results/x_y_smooth/s_responses.png"),
+    dpi=500,
+)
 
 plt.show()

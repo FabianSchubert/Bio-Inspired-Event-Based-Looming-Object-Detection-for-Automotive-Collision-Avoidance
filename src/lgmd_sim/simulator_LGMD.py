@@ -152,14 +152,14 @@ class LGMD_model:
         self.S_params = {
             "tau_m": p["TAU_MEM_S"],
             "tau_filt": p["TAU_FILT_S"],
-            "b_reg": p["B_REG_S"],
         }
-        self.S_inivars = {"Vx": 0.0, "Vy": 0.0, "Vt": 0.0, "It_prev": 0.0, "V": 0.0}
+        self.S_inivars = {"Vx": 0.0, "Vy": 0.0, "Vt": 0.0, "Isyn_t_filt": 0.0, "V": 0.0}
 
-        xs, ys = np.meshgrid(np.arange(self.S_width)-self.S_width//2, np.arange(self.S_height) - self.S_height//2)
-        psnorm = xs**2. + ys**2.
-        xsnorm = xs / (psnorm + p["S_POS_NORM_REG"])
-        ysnorm = ys / (psnorm + p["S_POS_NORM_REG"])
+        xs, ys = np.meshgrid(
+            np.arange(self.S_width) - self.S_width // 2,
+            np.arange(self.S_height) - self.S_height // 2,
+        )
+        dnorm = p["B_REG_S"] * (xs**2.0 + ys**2.0 + p["S_POS_NORM_REG"])
 
         # LGMD neuron
         self.OUT_params = {
@@ -189,8 +189,6 @@ class LGMD_model:
         self.P_S_iniconn = genn_model.init_toeplitz_connectivity(
             "Conv2D", self.I_kernel_params
         )
-
-        self.P_S_ps_params = {"tau": p["TAU_PS_KERNEL"]}
 
         self.P = []
         self.input = []
@@ -255,8 +253,9 @@ class LGMD_model:
                     )
                 )
 
-                self.S[-1].set_extra_global_param("xnorm", xsnorm.flatten())
-                self.S[-1].set_extra_global_param("ynorm", ysnorm.flatten())
+                self.S[-1].set_extra_global_param("x", xs.flatten())
+                self.S[-1].set_extra_global_param("y", ys.flatten())
+                self.S[-1].set_extra_global_param("dnorm", dnorm.flatten())
 
                 # neuron populations
 

@@ -34,7 +34,8 @@ OBJECTS = [
 
 BACKGROUNDS = [
     "gray_bg",
-    "cloudy_bg"]
+    "cloudy_bg"
+]
 
 REC_DT = 10.0
 
@@ -108,6 +109,7 @@ for vel, obj, bg in product(VEL_MPS, OBJECTS, BACKGROUNDS):
     #    lgmd_network.S_height,
     # )
 
+    #'''
     np.savez(
         os.path.join(results_fold, "results.npz"),
         vs=vs,
@@ -115,7 +117,7 @@ for vel, obj, bg in product(VEL_MPS, OBJECTS, BACKGROUNDS):
         sleftout=sleftout,
         srightout=srightout,
         rec_n_t=rec_n_t,
-    )
+    )# '''
 
     """
 

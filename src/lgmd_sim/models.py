@@ -61,28 +61,27 @@ lif_neuron = genn_model.create_custom_neuron_class(
 
 s_neuron = genn_model.create_custom_neuron_class(
     "S",
-    param_names=["tau_m", "tau_filt", "b_reg"],
+    param_names=["tau_m", "tau_filt"],
     var_name_types=[
         ("Vx", "scalar"),
         ("Vy", "scalar"),
+        ("Isyn_t_filt", "scalar"),
         ("Vt", "scalar"),
-        ("It_prev", "scalar"),
         ("V", "scalar"),
     ],
     sim_code="""
     $(Vx) += DT * ($(Isyn_x) - $(Vx)) / $(tau_filt);
     $(Vy) += DT * ($(Isyn_y) - $(Vy)) / $(tau_filt);
-    $(Vt) += DT * (($(Isyn_t) - $(It_prev))/DT - $(Vt)) / $(tau_filt);
+    $(Isyn_t_filt) += DT * ($(Isyn_t) - $(Isyn_t_filt)) / $(tau_filt);
+    $(Vt) = ($(Isyn_t) - $(Isyn_t_filt))/$(tau_filt);
 
-    $(It_prev) = $(Isyn_t);
+    const scalar v_proj = $(x)[$(id)] * $(Vx) + $(y)[$(id)] * $(Vy);
 
-    const scalar v_proj = $(xnorm)[$(id)] * $(Vx) + $(ynorm)[$(id)] * $(Vy);
-
-    const scalar g_est = -v_proj * $(Vt) / ($(b_reg) + v_proj * v_proj);
+    const scalar g_est = -v_proj * $(Vt) / ($(dnorm)[$(id)] + v_proj * v_proj);
 
     $(V) += DT * (g_est - $(V)) / $(tau_m);
     """,
-    extra_global_params=[("xnorm", "scalar*"), ("ynorm", "scalar*")],
+    extra_global_params=[("x", "scalar*"), ("y", "scalar*"), ("dnorm", "scalar*")],
     additional_input_vars=[
         ("Isyn_x", "scalar", 0.0),
         ("Isyn_y", "scalar", 0.0),
