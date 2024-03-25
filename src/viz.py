@@ -41,7 +41,13 @@ def plot_event_slice(
 
 
 def play_event_anim(
-    evts: np.ndarray, t_start: float, t_end: float, dt: float, w: int, h: int
+    evts: np.ndarray,
+    t_start: float,
+    t_end: float,
+    dt: float,
+    w: int,
+    h: int,
+    save_frames: None | str = None,
 ) -> None:
     fig, ax = plt.subplots()
 
@@ -50,17 +56,28 @@ def play_event_anim(
 
     t_frames = t_start + np.arange(n_frames) * dt
 
+    frames_it = list(zip(t_frames, np.arange(t_frames.shape[0])))
+
     aximg = plot_event_slice(evts, t_start, dt, w, h, ax)
+
+    if save_frames:
+        if not os.path.exists(save_frames):
+            os.makedirs(save_frames)
 
     def init():
         return (aximg,)
 
     def update(frame):
-        aximg.set_data(gen_evt_hist(evts, frame, dt, w, h))
+        frame_t, frame_idx = frame
+        aximg.set_data(gen_evt_hist(evts, frame_t, dt, w, h))
+
+        if save_frames:
+            fig.savefig(os.path.join(save_frames, f"anim_{frame_idx}.png"))
+
         return (aximg,)
 
     ani = FuncAnimation(
-        fig, update, frames=t_frames, init_func=init, blit=True, interval=dt
+        fig, update, frames=frames_it, init_func=init, blit=True, interval=dt
     )
 
     plt.show()
@@ -119,4 +136,3 @@ def play_var_anim(
     )
 
     plt.show()
-
