@@ -21,7 +21,7 @@ base_fold = os.path.join(os.path.dirname(__file__), "../../../data/atis_examples
 
 base_fold_results = os.path.join(
     os.path.dirname(__file__),
-    "../../../data/experiments/atis_examples/s_cell_spike_responses/lgmd/",
+    "../../../data/experiments/atis_examples/",
 )
 
 input_data_files = os.listdir(base_fold)
@@ -30,7 +30,7 @@ n_examples = len(input_data_files)
 lgmd_network = LGMD_model(params)
 
 for k in range(n_examples):
-    results_fold = os.path.join(base_fold_results, f"example_{k}")
+    results_fold = os.path.join(base_fold_results, f"example_{k}/lgmd/")
 
     if not os.path.exists(results_fold):
         os.makedirs(results_fold)
@@ -65,10 +65,7 @@ for k in range(n_examples):
                 )
             )
             v_lgmd[-1].append(
-                np.reshape(
-                    rec_vars_n[f"VLGMD_{i}_{j}"],
-                    (-1, lgmd_network.tile_height, lgmd_network.tile_width),
-                )
+                rec_vars_n[f"VLGMD_{i}_{j}"].flatten(),
             )
             evts_s[-1].append(
                 convert_spk_id_to_evt_array(
@@ -82,8 +79,8 @@ for k in range(n_examples):
                 convert_spk_id_to_evt_array(
                     spike_ID[f"LGMD_{i}_{j}"],
                     spike_t[f"LGMD_{i}_{j}"],
-                    lgmd_network.S_width,
-                    lgmd_network.S_height,
+                    1,
+                    1,
                 )
             )
 

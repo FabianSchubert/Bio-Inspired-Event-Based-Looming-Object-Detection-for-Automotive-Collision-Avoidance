@@ -4,9 +4,10 @@ import sys
 
 from pygenn import genn_model
 from pygenn.genn_wrapper import NO_DELAY
-from .models import (
+from .models_lgmd import (
     bitmask_array_current_source,
     lif_neuron,
+    lgmd_neuron,
     one_one_with_boundary,
     threshold_exp_curr,
 )
@@ -121,6 +122,7 @@ class LGMD_model:
             "tau_m": p["TAU_MEM_LGMD"],
             "V_thresh": p["V_THRESH_LGMD"],
             "V_reset": p["V_RESET_LGMD"],
+            "scale_i_in": p["SCALE_I_IN_LGMD"]
         }
         self.LGMD_inivars = {"V": 0.0, "VI": 0.0}
 
@@ -231,7 +233,7 @@ class LGMD_model:
 
                 self.LGMD.append(
                     self.model.add_neuron_population(
-                        f"LGMD_{k}_{l}", 1, lif_neuron, LGMD_params, self.LGMD_inivars
+                        f"LGMD_{k}_{l}", 1, lgmd_neuron, LGMD_params, self.LGMD_inivars
                     )
                 )
 
@@ -314,6 +316,8 @@ class LGMD_model:
                         {},
                     )
                 )
+
+                self.in_LGMD[-1].ps_target_var = "Isyn_i"
 
                 for pop in self.rec_spikes:
                     self.model.neuron_populations[

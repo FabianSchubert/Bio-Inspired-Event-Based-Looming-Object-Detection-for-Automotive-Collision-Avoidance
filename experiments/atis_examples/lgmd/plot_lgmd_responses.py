@@ -15,7 +15,7 @@ from itertools import product
 
 base_fold = os.path.join(
     os.path.dirname(__file__),
-    "../../../data/experiments/atis_examples/s_cell_spike_responses/lgmd/",
+    "../../../data/experiments/atis_examples/",
 )
 
 clm = {
@@ -32,7 +32,7 @@ clm = {
 data = pd.DataFrame(columns=clm.values())
 
 for k, res_fold in enumerate(os.listdir(base_fold)):
-    res = np.load(os.path.join(base_fold, res_fold, "results.npz"))
+    res = np.load(os.path.join(base_fold, res_fold, "lgmd/results.npz"))
 
     # v_s = res["v_s"]
     v_lgmd = res["v_lgmd"]
@@ -111,7 +111,7 @@ for k in range(n_experiments):
                 ax=_ax[i, j],
             )
 
-            # _ax[i, j].set_ylim([0, 5.0])
+            _ax[i, j].set_ylim([-500, 500.0])
 
             if i != (tiles_y - 1):
                 _ax[i, j].set_xlabel("")

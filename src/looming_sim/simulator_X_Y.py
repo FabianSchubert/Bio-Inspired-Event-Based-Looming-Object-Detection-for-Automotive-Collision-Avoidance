@@ -4,7 +4,7 @@ import sys
 
 from pygenn import genn_model
 from pygenn.genn_wrapper import NO_DELAY
-from .models import (
+from .models_x_y import (
     bitmask_array_current_source,
     lif_neuron,
     s_neuron,

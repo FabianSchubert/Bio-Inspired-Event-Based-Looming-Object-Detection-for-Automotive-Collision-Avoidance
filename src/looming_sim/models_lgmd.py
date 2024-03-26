@@ -60,27 +60,21 @@ lif_neuron = genn_model.create_custom_neuron_class(
     is_auto_refractory_required=False,
 )
 
-s_neuron = genn_model.create_custom_neuron_class(
-    "S",
-    param_names=["tau_m", "V_thresh", "V_reset"],
-    var_name_types=[
-        ("VI", "scalar"),
-        ("VE", "scalar"),
-        ("V", "scalar"),
-        ("I", "scalar"),
-    ],
+lgmd_neuron = genn_model.create_custom_neuron_class(
+    "LGMD",
+    param_names=["tau_m", "V_thresh", "V_reset", "scale_i_in"],
+    var_name_types=[("V", "scalar"), ("VI", "scalar")],
     sim_code="""
-    $(VI) = min(1.0, $(Isyn_I));
-    $(VE) = $(Isyn_E);
-
-    $(I) = $(VE) * (1.0 - $(VI));
-
-    $(V) += ($(I) - $(V)) / $(tau_m) * DT;
+    $(VI) = $(Isyn) * exp($(Isyn_i)/$(scale_i_in));
+    $(V) += ($(VI)-$(V))/$(tau_m)*DT;  // linear Euler
     """,
-    threshold_condition_code="$(V) >= $(V_thresh)",
+    threshold_condition_code="""
+    $(V) >= $(V_thresh)
+    """,
     reset_code="""
     $(V)-= $(V_reset);  // soft reset by $(V_reset)
     """,
+    additional_input_vars=[("Isyn_i", "scalar", 0.0)],
     is_auto_refractory_required=False,
 )
 
