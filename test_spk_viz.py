@@ -4,7 +4,7 @@ import matplotlib.patches as patches
 
 from src.classifier.data_io import load_file
 import src.config as config
-from src.lgmd_sim.default_settings import p
+from src.looming_sim.default_settings import p
 
 import os
 

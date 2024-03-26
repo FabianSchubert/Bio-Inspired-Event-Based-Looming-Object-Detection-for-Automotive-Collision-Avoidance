@@ -61,7 +61,6 @@ params = {
     "CUDA_VISIBLE_DEVICES": False,
     # recording settings
     "REC_SPIKES": ["P", "S", "LGMD"],
-    "REC_NEURONS": [("P", "V"), ("S", "V"), ("LGMD", "V")],
     "REC_SYNAPSES": [],  # ("in_S_I","in_syn")],
 }
 

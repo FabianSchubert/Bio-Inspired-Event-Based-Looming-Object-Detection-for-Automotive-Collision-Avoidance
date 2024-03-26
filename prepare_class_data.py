@@ -9,7 +9,7 @@ from src.classifier.data_io import load_folders, save_data
 from src.utils import crop_factor
 
 import src.config as config
-from src.lgmd_sim.default_settings import params
+from src.looming_sim.default_settings import params
 
 import os
 

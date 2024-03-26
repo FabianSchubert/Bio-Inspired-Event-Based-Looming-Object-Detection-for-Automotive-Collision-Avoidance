@@ -1,4 +1,4 @@
-from src.lgmd_sim.default_settings import params as def_params
+from src.looming_sim.default_settings import params as def_params
 from src.classifier.network import generate_full_conn_network, generate_cnn_network
 from src.classifier.data_io import load_file
 from src.classifier.train import train_network

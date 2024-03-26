@@ -12,6 +12,8 @@ import numpy as np
 
 import os
 
+import matplotlib.pyplot as plt
+
 
 VEL_MPS = [
     0.5,
@@ -30,14 +32,28 @@ OBJECTS = [
     "disc_rand_struct_bright",
 ]
 
-BACKGROUNDS = ["gray_bg", "cloudy_bg"]
+BACKGROUNDS = [
+    "gray_bg",
+    "cloudy_bg"
+]
 
 REC_DT = 10.0
+
+REC_NEURONS = [
+    ("S", "V"),
+    ("OUT", "S_left"),
+    ("OUT", "S_right"),
+    ("OUT", "V_est"),
+    ("S", "Vx"),
+    ("S", "Vy"),
+    ("S", "Vt"),
+]
 
 base_fold = os.path.join(os.path.dirname(__file__), "../../../data/synthetic/")
 
 base_fold_results = os.path.join(
-    os.path.dirname(__file__), "../../../data/experiments/synth_looming/s_cell_spike_responses/lgmd/"
+    os.path.dirname(__file__),
+    "../../../data/experiments/synth_looming/s_cell_spike_responses/x_y_smooth/",
 )
 
 lgmd_network = LGMD_model(params)
@@ -57,40 +73,51 @@ for vel, obj, bg in product(VEL_MPS, OBJECTS, BACKGROUNDS):
 
     spike_t, spike_ID, rec_vars_n, rec_n_t, rec_vars_s, rec_s_t = (
         lgmd_network.run_model(
-            0.0, 10000.0, rec_neurons=params["REC_NEURONS"], rec_timestep=REC_DT
+            0.0, 10000.0, rec_neurons=REC_NEURONS, rec_timestep=REC_DT
         )
-    )
-
-    vp = np.reshape(
-        rec_vars_n["VP_0_0"], (-1, lgmd_network.tile_height, lgmd_network.tile_width)
     )
 
     vs = np.reshape(
         rec_vars_n["VS_0_0"], (-1, lgmd_network.S_height, lgmd_network.S_width)
     )
-
-    evts_p = convert_spk_id_to_evt_array(
-        spike_ID["P_0_0"],
-        spike_t["P_0_0"],
-        lgmd_network.tile_width,
-        lgmd_network.tile_height,
+    vxs = np.reshape(
+        rec_vars_n["VxS_0_0"], (-1, lgmd_network.S_height, lgmd_network.S_width)
+    )
+    vys = np.reshape(
+        rec_vars_n["VyS_0_0"], (-1, lgmd_network.S_height, lgmd_network.S_width)
+    )
+    vts = np.reshape(
+        rec_vars_n["VtS_0_0"], (-1, lgmd_network.S_height, lgmd_network.S_width)
     )
 
-    evts_s = convert_spk_id_to_evt_array(
-        spike_ID["S_0_0"],
-        spike_t["S_0_0"],
-        lgmd_network.S_width,
-        lgmd_network.S_height,
-    )
+    vout = rec_vars_n["V_estOUT_0_0"].flatten()
 
+    sleftout = rec_vars_n["S_leftOUT_0_0"].flatten()
+    srightout = rec_vars_n["S_rightOUT_0_0"].flatten()
+
+    # evts_p = convert_spk_id_to_evt_array(
+    #    spike_ID["P_0_0"],
+    #    spike_t["P_0_0"],
+    #    lgmd_network.tile_width,
+    #    lgmd_network.tile_height,
+    # )
+
+    # evts_s = convert_spk_id_to_evt_array(
+    #    spike_ID["S_0_0"],
+    #    spike_t["S_0_0"],
+    #    lgmd_network.S_width,
+    #    lgmd_network.S_height,
+    # )
+
+    #'''
     np.savez(
         os.path.join(results_fold, "results.npz"),
-        vp=vp,
         vs=vs,
-        evts_p=evts_p,
-        evts_s=evts_s,
+        vout=vout,
+        sleftout=sleftout,
+        srightout=srightout,
         rec_n_t=rec_n_t,
-    )
+    )# '''
 
     """
 
@@ -103,10 +130,6 @@ for vel, obj, bg in product(VEL_MPS, OBJECTS, BACKGROUNDS):
         -np.maximum(0.0, vs.max()),
         np.maximum(0.0, vs.max()),
         os.path.join(data_fold, "vs_anim/"),
-    )
-
-    play_event_anim(
-        evts_s, 0.0, 10000, 50.0, lgmd_network.S_width, lgmd_network.S_height
     )
 
     import pdb

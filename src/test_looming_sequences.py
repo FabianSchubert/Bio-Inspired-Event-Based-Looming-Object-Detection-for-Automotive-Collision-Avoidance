@@ -1,8 +1,8 @@
 import numpy as np
 
-from src.lgmd_sim.simulator_LGMD import LGMD_model
+from src.looming_sim.simulator_LGMD import LGMD_model
 from src.utils import make_sdf, compare_boxes_patches, iou
-from src.lgmd_sim.format_spike_data import get_atis_event_array
+from src.looming_sim.format_spike_data import get_atis_event_array
 
 from sklearn.metrics import f1_score
 

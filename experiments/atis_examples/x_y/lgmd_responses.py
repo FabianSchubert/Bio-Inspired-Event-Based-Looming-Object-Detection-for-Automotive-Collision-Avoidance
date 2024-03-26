@@ -15,11 +15,13 @@ import os
 
 REC_DT = 10.0
 
+REC_NEURONS = [("S", "V"), ("P", "V")]
+
 base_fold = os.path.join(os.path.dirname(__file__), "../../../data/atis_examples/")
 
 base_fold_results = os.path.join(
     os.path.dirname(__file__),
-    "../../../data/experiments/atis_examples/s_cell_spike_responses/lgmd/",
+    "../../../data/experiments/atis_examples/s_cell_spike_responses/x_y_smooth/",
 )
 
 lgmd_network = LGMD_model(params)
@@ -40,7 +42,7 @@ for k in range(7):
 
     spike_t, spike_ID, rec_vars_n, rec_n_t, rec_vars_s, rec_s_t = (
         lgmd_network.run_model(
-            0.0, t_end, rec_neurons=params["REC_NEURONS"], rec_timestep=REC_DT
+            0.0, t_end, rec_neurons=REC_NEURONS, rec_timestep=REC_DT
         )
     )
 

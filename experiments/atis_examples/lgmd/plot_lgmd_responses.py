@@ -20,27 +20,43 @@ base_fold = os.path.join(
 
 clm = {
     "t": "t",
-    "count": "Event Count",
+    # "count": "Event Count",
     "exid": "Example ID",
     "tly": "Tile ID y",
     "tlx": "Tile ID x",
-    "tlcmb": "Tile ID combined",
-    "vs": "V S",
+    # "tlcmb": "Tile ID combined",
+    # "vs": "V S",
+    "vlgmd": "V LGMD",
 }
 
-evt_count = pd.DataFrame(columns=clm.values())
+data = pd.DataFrame(columns=clm.values())
 
 for k, res_fold in enumerate(os.listdir(base_fold)):
     res = np.load(os.path.join(base_fold, res_fold, "results.npz"))
 
-    vs = res["vs"]
-    s_spikes = res["evts_s"]
+    # v_s = res["v_s"]
+    v_lgmd = res["v_lgmd"]
+    # evts_s = res["evts_s"]
+    # evts_lgmd = res["evts_lgmd"]
     t_ax = res["rec_n_t"]
 
-    for i in range(7):
-        for j in range(7):
-            df_s = pd.DataFrame(s_spikes[i][j])
+    tiles_y = len(v_lgmd)
+    tiles_x = len(v_lgmd[0])
 
+    for i in range(tiles_y):
+        for j in range(tiles_x):
+            # df_s = pd.DataFrame(s_spikes[i][j])
+
+            _data_tile = pd.DataFrame(
+                {
+                    clm["vlgmd"]: v_lgmd[i][j],
+                    "t": t_ax,
+                    clm["exid"]: k,
+                    clm["tly"]: i,
+                    clm["tlx"]: j,
+                }
+            )
+            """
             _evt_count = pd.DataFrame(
                 {
                     clm["vs"]: vs[i][j].mean(axis=(1, 2)),
@@ -50,7 +66,7 @@ for k, res_fold in enumerate(os.listdir(base_fold)):
                     clm["tlx"]: j,
                     clm["tlcmb"]: i * len(vs[0]) + j,
                 }
-            )
+            )"""
 
             # _evt_count = df_s.groupby("t").sum()
             # _evt_count = _evt_count.sort_index()
@@ -64,24 +80,9 @@ for k, res_fold in enumerate(os.listdir(base_fold)):
             # _evt_count[clm["vs"]] = vs[i][j]
             # _evt_count.drop(labels=["x", "y", "p"], axis=1, inplace=True)
 
-            evt_count = pd.concat([evt_count, _evt_count], ignore_index=True)
+            data = pd.concat([data, _data_tile], ignore_index=True)
 
-evt_count["t"] = evt_count["t"].astype("float")
-# evt_count[clm["count"]] = evt_count[clm["count"]].astype("float")
-evt_count["t"] = 10.0 * (evt_count["t"] // 10.0)
-
-evt_grouped_avg = evt_count.groupby(
-    ["t", clm["exid"], clm["tlcmb"], clm["tly"], clm["tlx"]]
-).mean()
-
-evt_count_avg = evt_grouped_avg.reset_index()
-
-
-# peak_count = evt_count_avg.loc[
-#    evt_count_avg.groupby([clm["vel"], clm["obj"]]).idxmax()[clm["count"]]
-# ]
-
-# prod_obj_bg = list(product(objects, backgrounds))
+data["t"] = data["t"].astype("float")
 
 n_experiments = len(os.listdir(base_fold))
 
@@ -90,29 +91,29 @@ ax = []
 
 for k in range(n_experiments):
     _fig, _ax = plt.subplots(
-        7,
-        7,
-        figsize=(7, 7),
+        tiles_y,
+        tiles_x,
+        figsize=(8, 8),
     )
     fig.append(_fig)
     ax.append(_ax)
 
-    for i in range(7):
-        for j in range(7):
+    for i in range(tiles_y):
+        for j in range(tiles_x):
             sns.lineplot(
-                data=evt_count_avg[
-                    (evt_count_avg[clm["exid"]] == k)
-                    & (evt_count_avg[clm["tly"]] == i)
-                    & (evt_count_avg[clm["tlx"]] == j)
+                data=data[
+                    (data[clm["exid"]] == k)
+                    & (data[clm["tly"]] == i)
+                    & (data[clm["tlx"]] == j)
                 ],
                 x="t",
-                y="V S",
+                y="V LGMD",
                 ax=_ax[i, j],
             )
 
-            _ax[i, j].set_ylim([0, 5.0])
+            # _ax[i, j].set_ylim([0, 5.0])
 
-            if i != 6:
+            if i != (tiles_y - 1):
                 _ax[i, j].set_xlabel("")
                 _ax[i, j].xaxis.set_tick_params(labelbottom=False)
                 _ax[i, j].set_xticks([])
@@ -128,7 +129,7 @@ for k in range(n_experiments):
     _fig.tight_layout(pad=0.1)
 
     _fig.savefig(
-        os.path.join(os.path.dirname(__file__), f"results/s_responses_ex{k}.png"),
+        os.path.join(os.path.dirname(__file__), f"results/lgmd_responses_ex{k}.png"),
         dpi=500,
     )
 

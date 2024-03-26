@@ -4,7 +4,7 @@ from src.test_looming_sequences import evaluate_response
 
 from sklearn.metrics import confusion_matrix, precision_score, recall_score
 
-from src.lgmd_sim.default_settings import p as p_default
+from src.looming_sim.default_settings import p as p_default
 
 import matplotlib.pyplot as plt
 import seaborn as sns
