@@ -1,7 +1,5 @@
 import numpy as np
 from src.utils import FixedDict
-import os
-from skimage.io import imread
 
 kern_w = 21
 
@@ -21,11 +19,12 @@ params = {
     "N_SUBDIV_X": 4,
     "N_SUBDIV_Y": 4,
     "HALF_STEP_TILES": True,
+    "SPK_REC_STEPS": 100,
     #
     "TAU_MEM_P": 50.0,
     "V_THRESH_P": 0.1,
     "V_RESET_P": 0.0,
-    "INPUT_EVENT_CURRENT": 5.0,
+    "INPUT_EVENT_CURRENT": 15.0,
     #
     "P_S_T_KERNEL": kernel_s_t,
     #
@@ -34,12 +33,11 @@ params = {
     "B_REG_S": 1e-9,
     "S_POS_NORM_REG": 1e0,
     #
-    "TAU_MEM_OUT": 5.0,
+    "TAU_MEM_OUT": 100.0,
     "G_FILT_BIAS_OUT": 1e-11,
     "G_FILT_SCALE_OUT": 1e-11,
 }
 
 params["NT_MAX"] = int(10000./params["DT_MS"])
-params["SPK_REC_STEPS"] = params["NT_MAX"]
 
 params = FixedDict(params)
