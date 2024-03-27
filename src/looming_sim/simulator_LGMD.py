@@ -72,8 +72,8 @@ class LGMD_model(Base_model):
         self.I_kernel_params = {
             "conv_kh": p["KERNEL_HEIGHT"],
             "conv_kw": p["KERNEL_WIDTH"],
-            "conv_ih": p["INPUT_HEIGHT"],
-            "conv_iw": p["INPUT_WIDTH"],
+            "conv_ih": self.tile_height,
+            "conv_iw": self.tile_width,
             "conv_ic": 1,
             "conv_oh": self.S_height,
             "conv_ow": self.S_width,

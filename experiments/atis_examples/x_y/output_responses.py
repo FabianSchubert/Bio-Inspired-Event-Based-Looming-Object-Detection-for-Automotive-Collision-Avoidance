@@ -65,10 +65,6 @@ for k in range(n_examples):
             )
             v_out[-1].append(rec_vars_n[f"VOUT_{i}_{j}"].flatten())
 
-    import pdb
-
-    pdb.set_trace()
-
     np.savez(
         os.path.join(results_fold, "results.npz"),
         v_s=v_s,
