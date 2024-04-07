@@ -20,11 +20,9 @@ base_fold = os.path.join(
 
 clm = {
     "t": "t",
-    # "count": "Event Count",
     "exid": "Example ID",
     "tly": "Tile ID y",
     "tlx": "Tile ID x",
-    # "tlcmb": "Tile ID combined",
     "vs": "V S",
     "vout": "V Out",
 }
@@ -35,12 +33,10 @@ res_folds = os.listdir(base_fold)
 res_folds.sort()
 
 for k, res_fold in enumerate(res_folds):
-    res = np.load(os.path.join(base_fold, res_fold, "lgmd/results.npz"))
+    res = np.load(os.path.join(base_fold, res_fold, "x_y_reichardt/results.npz"))
 
-    # v_s = res["v_s"]
+    v_s = res["v_s"]
     v_out = res["v_out"]
-    # evts_s = res["evts_s"]
-    # evts_lgmd = res["evts_lgmd"]
     t_ax = res["rec_n_t"]
 
     tiles_y = len(v_out)
@@ -50,6 +46,7 @@ for k, res_fold in enumerate(res_folds):
         for j in range(tiles_x):
             _data_tile = pd.DataFrame(
                 {
+                    clm["vs"]: v_s[i][j].mean(axis=(1, 2)),
                     clm["vout"]: v_out[i][j],
                     "t": t_ax,
                     clm["exid"]: k,
@@ -89,7 +86,7 @@ for k in range(n_experiments):
                 ax=_ax[i, j],
             )
 
-            _ax[i, j].set_ylim([-1., 1.])
+            _ax[i, j].set_ylim([-1e-5, 1e-5])
 
             if i != (tiles_y - 1):
                 _ax[i, j].set_xlabel("")

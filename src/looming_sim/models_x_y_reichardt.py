@@ -19,31 +19,28 @@ p_neuron = genn_model.create_custom_neuron_class(
 
 s_neuron = genn_model.create_custom_neuron_class(
     "S",
-    param_names=["tau_m", "tau_filt"],
+    param_names=["tau_m", "vel_norm"],
     var_name_types=[
         ("Vx", "scalar"),
         ("Vy", "scalar"),
-        ("Isyn_t_filt", "scalar"),
-        ("Vt", "scalar"),
         ("V", "scalar"),
     ],
     sim_code="""
-    $(Vx) += DT * ($(Isyn_x) - $(Vx)) / $(tau_filt);
-    $(Vy) += DT * ($(Isyn_y) - $(Vy)) / $(tau_filt);
-    $(Isyn_t_filt) += DT * ($(Isyn_t) - $(Isyn_t_filt)) / $(tau_filt);
-    $(Vt) = ($(Isyn_t) - $(Isyn_t_filt))/$(tau_filt);
+    $(Vx) = $(Isyn_x) * $(Isyn_t) / ($(vel_norm) + $(Isyn_norm));
+    $(Vy) = $(Isyn_x) * $(Isyn_t) / ($(vel_norm) + $(Isyn_norm));
 
     const scalar v_proj = $(x)[$(id)] * $(Vx) + $(y)[$(id)] * $(Vy);
 
-    const scalar g_est = max(0.0, -v_proj * $(Vt) / ($(dnorm)[$(id)] + v_proj * v_proj));
+    const scalar g_est = v_proj;
 
     $(V) += DT * (g_est - $(V)) / $(tau_m);
     """,
-    extra_global_params=[("x", "scalar*"), ("y", "scalar*"), ("dnorm", "scalar*")],
+    extra_global_params=[("x", "scalar*"), ("y", "scalar*")],
     additional_input_vars=[
         ("Isyn_x", "scalar", 0.0),
         ("Isyn_y", "scalar", 0.0),
         ("Isyn_t", "scalar", 0.0),
+        ("Isyn_norm", "scalar", 0.0),
     ],
     is_auto_refractory_required=False,
 )
@@ -61,8 +58,8 @@ out_neuron = genn_model.create_custom_neuron_class(
    //const scalar g_filt_left = $(S_left) > 0.0 ? 1.0 : 0.0;
    //const scalar g_filt_right = $(S_right) > 0.0 ? 1.0 : 0.0;
 
-   const scalar g_filt_left = 1.0 - exp(-max(0.0, $(S_left))/$(g_filt_scale));
-   const scalar g_filt_right = 1.0 - exp(-max(0.0, $(S_right))/$(g_filt_scale));
+   const scalar g_filt_left = 1.0 - exp(-max(0.0, ($(S_left) - $(g_filt_bias)))/$(g_filt_scale));
+   const scalar g_filt_right = 1.0 - exp(-max(0.0, ($(S_right) - $(g_filt_bias)))/$(g_filt_scale));
    
    $(V) += DT * (g_filt_left * g_filt_right * 0.5 * ($(S_left) + $(S_right)) - $(V)) / $(tau_m);
    """,

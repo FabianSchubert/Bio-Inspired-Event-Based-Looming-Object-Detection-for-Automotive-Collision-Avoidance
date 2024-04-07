@@ -79,11 +79,11 @@ for k in range(n_experiments):
                     & (data[clm["tlx"]] == j)
                 ],
                 x="t",
-                y="V S",
+                y="V Out",
                 ax=_ax[i, j],
             )
 
-            #_ax[i, j].set_ylim([-1e-10, 1e-10])
+            _ax[i, j].set_ylim([-1e-3, 1e-3])
 
             if i != (tiles_y - 1):
                 _ax[i, j].set_xlabel("")

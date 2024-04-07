@@ -4,11 +4,15 @@ from pygenn import genn_model
 from pygenn.genn_wrapper import NO_DELAY
 from .models_lgmd import (
     lgmd_neuron,
-    one_one_with_boundary,
     threshold_exp_curr,
 )
 
-from .models_generic import bitmask_array_current_source, lif_neuron
+from .models_generic import (
+    bitmask_array_current_source,
+    p_neuron,
+    lif_neuron,
+    one_one_with_boundary,
+)
 
 from .simulator_base import Base_model
 
@@ -17,6 +21,7 @@ class LGMD_model(Base_model):
     def define_network(self, p):
         P_params = {
             "tau_m": p["TAU_MEM_P"],
+            "tau_i": p["TAU_I_P"],
             "V_thresh": p["V_THRESH_P"],
             "V_reset": p["V_RESET_P"],
         }
@@ -57,8 +62,8 @@ class LGMD_model(Base_model):
 
         # excitatory input to S
         iniconn_params = {
-            "in_ht": p["INPUT_HEIGHT"],
-            "in_wd": p["INPUT_WIDTH"],
+            "in_ht": self.tile_height,
+            "in_wd": self.tile_width,
             "out_yoff": p["KERNEL_HEIGHT"] // 2,
             "out_xoff": p["KERNEL_WIDTH"] // 2,
         }
@@ -104,7 +109,7 @@ class LGMD_model(Base_model):
             for j in range(self.n_tiles_x):
                 self.P.append(
                     self.model.add_neuron_population(
-                        f"P_{i}_{j}", self.n_input, lif_neuron, P_params, self.P_inivars
+                        f"P_{i}_{j}", self.n_input, p_neuron, P_params, self.P_inivars
                     )
                 )
 

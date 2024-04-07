@@ -2,19 +2,22 @@ import numpy as np
 
 from pygenn import genn_model
 from pygenn.genn_wrapper import NO_DELAY
-from .models_x_y import (
-    p_neuron,
+from .models_x_y_reichardt import (
     s_neuron,
     out_neuron,
     cont_wu,
 )
 
-from .models_generic import bitmask_array_current_source
+from .models_generic import (
+    bitmask_array_current_source,
+    one_one_with_boundary,
+    p_neuron,
+)
 
 from .simulator_base import Base_model
 
 
-class X_Y_model(Base_model):
+class X_Y_Reichardt_model(Base_model):
     def define_network(self, p):
         P_params = {
             "tau_m": p["TAU_MEM_P"],
@@ -29,31 +32,32 @@ class X_Y_model(Base_model):
 
         self.input_inivars = {"nt": self.nt_max, "pop_size": self.n_input}
 
-        self.P_S_ps_params = {"tau": p["P_S_PS_TAU"]}
+        # self.P_S_ps_params = {"tau": p["P_S_PS_TAU"]}
 
-        self.P_S_t_kernel = p["P_S_T_KERNEL"]
-        self.kernel_height, self.kernel_width = self.P_S_t_kernel.shape
+        self.P_S_norm_kernel = p["P_S_NORM_KERNEL"]
+        self.kernel_height, self.kernel_width = self.P_S_norm_kernel.shape
 
         assert self.kernel_height % 2 != 0, "kernel height must be uneven"
         assert self.kernel_width % 2 != 0, "kernel width must be uneven"
 
         # just to make sure it's normalised
-        self.P_S_t_kernel /= self.P_S_t_kernel.sum()
+        self.P_S_norm_kernel /= self.P_S_norm_kernel.sum()
 
-        self.P_S_t_inivars = {"g": self.P_S_t_kernel.flatten()}
+        self.P_S_norm_inivars = {"g": self.P_S_norm_kernel.flatten()}
 
-        # x derivative by shifting left and right.
-        self.P_S_x_kernel = np.zeros(self.P_S_t_kernel.shape)
-        self.P_S_x_kernel[:, 1:] += self.P_S_t_kernel[:, :-1] / 2.0
-        self.P_S_x_kernel[:, :-1] -= self.P_S_t_kernel[:, 1:] / 2.0
+        # x and y kernel by multiplying norm kernel with x and y coord.
+        xk, yk = np.meshgrid(
+            np.arange(self.kernel_width) - self.kernel_width // 2,
+            np.arange(self.kernel_height) - self.kernel_height // 2,
+        )
+
+        self.P_S_x_kernel = self.P_S_norm_kernel * xk
+        self.P_S_y_kernel = self.P_S_norm_kernel * yk
+
+        self.P_S_x_kernel /= p["DT_MS"] * p["P_S_T_DELAY_STEPS"]
+        self.P_S_y_kernel /= p["DT_MS"] * p["P_S_T_DELAY_STEPS"]
 
         self.P_S_x_inivars = {"g": self.P_S_x_kernel.flatten()}
-
-        # same for y
-        self.P_S_y_kernel = np.zeros(self.P_S_t_kernel.shape)
-        self.P_S_y_kernel[1:, :] += self.P_S_t_kernel[:-1, :] / 2.0
-        self.P_S_y_kernel[:-1, :] -= self.P_S_t_kernel[1:, :] / 2.0
-
         self.P_S_y_inivars = {"g": self.P_S_y_kernel.flatten()}
 
         self.kernel_half_width = (self.kernel_width - 1) // 2
@@ -76,18 +80,16 @@ class X_Y_model(Base_model):
         )
         self.S_OUT_right_weights = np.reshape(self.S_OUT_right_weights, (self.n_S, 1))
 
-        self.S_params = {
-            "tau_m": p["TAU_MEM_S"],
-            "tau_filt": p["TAU_FILT_S"],
-        }
-        self.S_inivars = {"Vx": 0.0, "Vy": 0.0, "Vt": 0.0, "Isyn_t_filt": 0.0, "V": 0.0}
+        self.S_params = {"tau_m": p["TAU_MEM_S"], "vel_norm": p["VEL_NORM_S"]}
+        self.S_inivars = {"Vx": 0.0, "Vy": 0.0, "V": 0.0}
 
+        # x and y kernel by multiplying norm kernel with x and y coord.
         xs, ys = np.meshgrid(
             np.arange(self.S_width) - self.S_width // 2,
             np.arange(self.S_height) - self.S_height // 2,
         )
-        dnorm = p["B_REG_S"] * (xs**2.0 + ys**2.0 + p["S_POS_NORM_REG"])
-        #dnorm = p["B_REG_S"] * (np.zeros((self.S_height, self.S_width)) + p["S_POS_NORM_REG"])
+        _norm = xs**2.0 + ys**2.0 + p["S_POS_NORM_REG"]
+        xnorm, ynorm = xs / _norm, ys / _norm
 
         self.OUT_params = {
             "tau_m": p["TAU_MEM_OUT"],
@@ -125,11 +127,13 @@ class X_Y_model(Base_model):
         self.P_S_x = []
         self.P_S_y = []
         self.P_S_t = []
+        self.P_S_norm = []
         self.S_OUT_left = []
         self.S_OUT_right = []
 
         for i in range(self.n_tiles_y):
             for j in range(self.n_tiles_x):
+                # neuron populations
                 self.P.append(
                     self.model.add_neuron_population(
                         f"P_{i}_{j}", self.n_input, p_neuron, P_params, self.P_inivars
@@ -180,11 +184,8 @@ class X_Y_model(Base_model):
                     )
                 )
 
-                self.S[-1].set_extra_global_param("x", xs.flatten())
-                self.S[-1].set_extra_global_param("y", ys.flatten())
-                self.S[-1].set_extra_global_param("dnorm", dnorm.flatten())
-
-                # neuron populations
+                self.S[-1].set_extra_global_param("x", xnorm.flatten())
+                self.S[-1].set_extra_global_param("y", ynorm.flatten())
 
                 self.OUT.append(
                     self.model.add_neuron_population(
@@ -204,8 +205,8 @@ class X_Y_model(Base_model):
                         self.P_S_x_inivars,
                         {},
                         {},
-                        "ExpCurr",
-                        self.P_S_ps_params,
+                        "DeltaCurr",
+                        {},
                         {},
                         self.P_S_iniconn,
                     )
@@ -225,8 +226,8 @@ class X_Y_model(Base_model):
                         self.P_S_y_inivars,
                         {},
                         {},
-                        "ExpCurr",
-                        self.P_S_ps_params,
+                        "DeltaCurr",
+                        {},
                         {},
                         self.P_S_iniconn,
                     )
@@ -237,23 +238,52 @@ class X_Y_model(Base_model):
                 self.P_S_t.append(
                     self.model.add_synapse_population(
                         f"P_S_t_{i}_{j}",
+                        "SPARSE_GLOBALG",
+                        int(p["P_S_T_DELAY_STEPS"]),
+                        self.P[-1],
+                        self.S[-1],
+                        "StaticPulse",
+                        {},
+                        {"g": 1.0},
+                        {},
+                        {},
+                        "DeltaCurr",
+                        {},
+                        {},
+                        genn_model.init_connectivity(
+                            one_one_with_boundary,
+                            {
+                                "in_ht": self.tile_height,
+                                "in_wd": self.tile_width,
+                                "out_yoff": self.kernel_half_height,
+                                "out_xoff": self.kernel_half_height,
+                            },
+                        ),
+                    )
+                )
+
+                self.P_S_t[-1].ps_target_var = "Isyn_t"
+
+                self.P_S_norm.append(
+                    self.model.add_synapse_population(
+                        f"P_S_norm_{i}_{j}",
                         "TOEPLITZ_KERNELG",
                         NO_DELAY,
                         self.P[-1],
                         self.S[-1],
                         "StaticPulse",
                         {},
-                        self.P_S_t_inivars,
+                        self.P_S_norm_inivars,
                         {},
                         {},
-                        "ExpCurr",
-                        self.P_S_ps_params,
+                        "DeltaCurr",
+                        {},
                         {},
                         self.P_S_iniconn,
                     )
                 )
 
-                self.P_S_t[-1].ps_target_var = "Isyn_t"
+                self.P_S_norm[-1].ps_target_var = "Isyn_norm"
 
                 self.S_OUT_left.append(
                     self.model.add_synapse_population(

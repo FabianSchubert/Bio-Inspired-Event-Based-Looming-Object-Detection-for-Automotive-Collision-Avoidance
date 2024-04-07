@@ -16,16 +16,17 @@ params = {
     "OUT_DIR": ".",
     "INPUT_WIDTH": 304,
     "INPUT_HEIGHT": 240,
-    "N_SUBDIV_X": 4,
-    "N_SUBDIV_Y": 4,
+    "N_SUBDIV_X": 2,
+    "N_SUBDIV_Y": 2,
     "HALF_STEP_TILES": True,
+    "SPK_REC_STEPS": 100,
     # S kernel settings
     "KERNEL_WIDTH": KERNEL_WIDTH,  # inhibition kernel width; needs to be ODD
     "KERNEL_HEIGHT": KERNEL_HEIGHT,  # inhibition kernel height; needs to be ODD
     "KERNEL_G": -kernel_g.flatten(),
-    "SCALE_KERNEL_G": 1.0,
+    "SCALE_KERNEL_G": 0.1,
     "KERNEL_D": np.ones((25), dtype="int"),
-    "SCALE_KERNEL_D": 200.0,
+    "SCALE_KERNEL_D": 500.0,
     # P to S settings
     "TAU_SYN_IN_S_I": 150.0,
     "TAU_SYN_IN_S_E": 150.0,
@@ -38,14 +39,15 @@ params = {
     "THRESH_IN_LGMD": 300.0,
     "SYN_DELAY_IN_LGMD": int(0),
     # P settings
-    "MAX_INPUT_SPIKES": 100000000,
-    "INPUT_EVENT_CURRENT": 15.,
     "TAU_MEM_P": 50.0,
-    "V_THRESH_P": 0.1,
+    "TAU_I_P": 20.0,
+    "V_THRESH_P": 0.01,
     "V_RESET_P": 0.0,
+    "INPUT_EVENT_CURRENT": 1.0,
+    "MAX_INPUT_SPIKES": 100000000,
     # S settings
     "TAU_MEM_S": 50.0,
-    "V_THRESH_S": 10.0,
+    "V_THRESH_S": 1.0,
     "V_RESET_S": 0.0,
     # LGMD settings
     "TAU_MEM_LGMD": 150.0,
@@ -54,7 +56,6 @@ params = {
     "SCALE_I_IN_LGMD": 500.,
     # simulation settings
     "DT_MS": 1.0,
-    "TRIAL_MS": 10000.0,
     "T_START_MS": 0.0,
     "TIMING": False,
     "MODEL_SEED": None,
@@ -65,5 +66,4 @@ params = {
     "REC_SYNAPSES": [],  # ("in_S_I","in_syn")],
 }
 
-params["SPK_REC_STEPS"] = int(params["TRIAL_MS"] / params["DT_MS"])
-params["NT_MAX"] = int(params["TRIAL_MS"] / params["DT_MS"])
+params["NT_MAX"] = int(10000.0 / params["DT_MS"])

@@ -15,7 +15,7 @@ import os
 
 REC_DT = 10.0
 
-REC_NEURONS = [("S", "V"), ("LGMD", "V")]
+REC_NEURONS = [("S", "V"), ("LGMD", "V"), ("P", "V"), ("P", "VI")]
 
 base_fold = os.path.join(os.path.dirname(__file__), "../../../data/atis_examples/")
 
@@ -47,16 +47,21 @@ for k in range(n_examples):
         lgmd_network.run_model(0.0, t_end, rec_neurons=REC_NEURONS, rec_timestep=REC_DT)
     )
 
+    v_p = []
     v_s = []
-    v_lgmd = []
-    evts_s = []
-    evts_lgmd = []
+    v_out = []
+    sp_p = []
+    sp_s = []
+    sp_out = []
 
     for i in range(lgmd_network.n_tiles_y):
+        v_p.append([])
         v_s.append([])
-        v_lgmd.append([])
-        evts_s.append([])
-        evts_lgmd.append([])
+        v_out.append([])
+        sp_p.append([])
+        sp_s.append([])
+        sp_out.append([])
+
         for j in range(lgmd_network.n_tiles_x):
             v_s[-1].append(
                 np.reshape(
@@ -64,9 +69,10 @@ for k in range(n_examples):
                     (-1, lgmd_network.S_height, lgmd_network.S_width),
                 )
             )
-            v_lgmd[-1].append(
+            v_out[-1].append(
                 rec_vars_n[f"VLGMD_{i}_{j}"].flatten(),
             )
+            '''
             evts_s[-1].append(
                 convert_spk_id_to_evt_array(
                     spike_ID[f"S_{i}_{j}"],
@@ -74,8 +80,8 @@ for k in range(n_examples):
                     lgmd_network.S_width,
                     lgmd_network.S_height,
                 )
-            )
-            evts_lgmd[-1].append(
+            )'''
+            sp_out[-1].append(
                 convert_spk_id_to_evt_array(
                     spike_ID[f"LGMD_{i}_{j}"],
                     spike_t[f"LGMD_{i}_{j}"],
@@ -83,12 +89,37 @@ for k in range(n_examples):
                     1,
                 )
             )
+            sp_p[-1].append(
+                convert_spk_id_to_evt_array(
+                    spike_ID[f"P_{i}_{j}"],
+                    spike_t[f"P_{i}_{j}"],
+                    lgmd_network.tile_width,
+                    lgmd_network.tile_height,
+                )
+            )
+
+            sp_s[-1].append(
+                convert_spk_id_to_evt_array(
+                    spike_ID[f"S_{i}_{j}"],
+                    spike_t[f"S_{i}_{j}"],
+                    lgmd_network.S_width,
+                    lgmd_network.S_height,
+                )
+            )
+
+    if (lgmd_network.n_tiles_x == 1) and (lgmd_network.n_tiles_y == 1):
+        sp_p = np.array(sp_p, dtype=sp_p[0][0].dtype)
+        sp_s = np.array(sp_s, dtype=sp_p[0][0].dtype)
+    else:
+        sp_p = np.array(sp_p, dtype=object)
+        sp_s = np.array(sp_s, dtype=object)
 
     np.savez(
         os.path.join(results_fold, "results.npz"),
         v_s=v_s,
-        v_lgmd=v_lgmd,
-        evts_s=evts_s,
-        evts_lgmd=evts_lgmd,
+        v_out=v_out,
+        sp_p=sp_p,
+        sp_s=sp_s,
+        sp_out=sp_out,
         rec_n_t=rec_n_t,
     )

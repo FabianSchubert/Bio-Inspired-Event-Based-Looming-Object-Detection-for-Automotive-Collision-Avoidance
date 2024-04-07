@@ -1,4 +1,4 @@
-from src.looming_sim.simulator_X_Y import X_Y_model
+from src.looming_sim.simulator_X_Y_reichardt import X_Y_Reichardt_model
 
 from .network_settings import params
 
@@ -23,10 +23,10 @@ base_fold_results = os.path.join(
 input_data_files = os.listdir(base_fold)
 n_examples = len(input_data_files)
 
-network = X_Y_model(params)
+network = X_Y_Reichardt_model(params)
 
 for k in range(n_examples):
-    results_fold = os.path.join(base_fold_results, f"example_{k}/x_y/")
+    results_fold = os.path.join(base_fold_results, f"example_{k}/x_y_reichardt/")
 
     if not os.path.exists(results_fold):
         os.makedirs(results_fold)
