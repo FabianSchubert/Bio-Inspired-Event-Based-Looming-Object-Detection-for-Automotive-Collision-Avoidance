@@ -47,7 +47,7 @@ def play_event_anim(
     dt: float,
     w: int,
     h: int,
-    save_frames: None | str = None,
+    save_frames: Union[None, str] = None,
 ) -> None:
     fig, ax = plt.subplots()
 
@@ -91,7 +91,7 @@ def play_var_anim(
     dt_play: float,
     vmin: float,
     vmax: float,
-    save_frames: None | str = None,
+    save_frames: Union[None, str] = None,
 ) -> None:
     fig, ax = plt.subplots()
 

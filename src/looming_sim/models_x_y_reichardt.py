@@ -19,7 +19,7 @@ p_neuron = genn_model.create_custom_neuron_class(
 
 s_neuron = genn_model.create_custom_neuron_class(
     "S",
-    param_names=["tau_m", "vel_norm"],
+    param_names=["tau_m", "vel_norm", "threshold"],
     var_name_types=[
         ("Vx", "scalar"),
         ("Vy", "scalar"),
@@ -31,7 +31,9 @@ s_neuron = genn_model.create_custom_neuron_class(
 
     const scalar v_proj = $(x)[$(id)] * $(Vx) + $(y)[$(id)] * $(Vy);
 
-    const scalar g_est = v_proj;
+    //const scalar g_est = max(0.0, v_proj);
+    const scalar g_est = v_proj > $(threshold) ? v_proj : 0.0;
+    //const scalar g_est = v_proj;
 
     $(V) += DT * (g_est - $(V)) / $(tau_m);
     """,
@@ -52,14 +54,14 @@ out_neuron = genn_model.create_custom_neuron_class(
     sim_code="""
    $(S_left) = $(Isyn_left);
    $(S_right) = $(Isyn_right);
-   //const scalar g_filt_left = 1./(1.+exp(-4.*($(S_left)-$(g_filt_bias))/$(g_filt_scale)));
-   //const scalar g_filt_right = 1./(1.+exp(-4.*($(S_right)-$(g_filt_bias))/$(g_filt_scale)));
+   const scalar g_filt_left = 1./(1.+exp(-4.*($(S_left)-$(g_filt_bias))/$(g_filt_scale)));
+   const scalar g_filt_right = 1./(1.+exp(-4.*($(S_right)-$(g_filt_bias))/$(g_filt_scale)));
    
    //const scalar g_filt_left = $(S_left) > 0.0 ? 1.0 : 0.0;
    //const scalar g_filt_right = $(S_right) > 0.0 ? 1.0 : 0.0;
 
-   const scalar g_filt_left = 1.0 - exp(-max(0.0, ($(S_left) - $(g_filt_bias)))/$(g_filt_scale));
-   const scalar g_filt_right = 1.0 - exp(-max(0.0, ($(S_right) - $(g_filt_bias)))/$(g_filt_scale));
+   //const scalar g_filt_left = 1.0 - exp(-max(0.0, ($(S_left) - $(g_filt_bias)))/$(g_filt_scale));
+   //const scalar g_filt_right = 1.0 - exp(-max(0.0, ($(S_right) - $(g_filt_bias)))/$(g_filt_scale));
    
    $(V) += DT * (g_filt_left * g_filt_right * 0.5 * ($(S_left) + $(S_right)) - $(V)) / $(tau_m);
    """,

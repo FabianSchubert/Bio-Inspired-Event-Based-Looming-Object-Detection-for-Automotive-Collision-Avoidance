@@ -18,6 +18,8 @@ import math
 
 import datetime
 
+from src.config import EVENTS_DTYPE
+
 
 def get_actor_display_name(actor, truncate=250):
     name = " ".join(actor.type_id.replace("_", ".").title().split(".")[1:])
@@ -25,12 +27,13 @@ def get_actor_display_name(actor, truncate=250):
 
 
 class CameraManager(object):
-    def __init__(self, parent_actor, hud, gamma_correction):
+    def __init__(self, parent_actor, hud, gamma_correction, fov=90.0):
         self.sensor = None
         self.surface = None
         self._parent = parent_actor
         self.hud = hud
         self.recording = False
+        self.sensor_data = None
         bound_x = 0.5 + self._parent.bounding_box.extent.x
         bound_y = 0.5 + self._parent.bounding_box.extent.y
         bound_z = 0.5 + self._parent.bounding_box.extent.z
@@ -168,6 +171,8 @@ class CameraManager(object):
                 bp.set_attribute("image_size_y", str(hud.dim[1]))
                 if bp.has_attribute("gamma"):
                     bp.set_attribute("gamma", str(gamma_correction))
+                if bp.has_attribute("fov"):
+                    bp.set_attribute("fov", str(fov))
                 for attr_name, attr_value in item[3].items():
                     bp.set_attribute(attr_name, attr_value)
             elif item[0].startswith("sensor.lidar"):
@@ -257,6 +262,12 @@ class CameraManager(object):
                     ]
                 ),
             )
+            dvs_events_conv = np.empty((len(dvs_events)), dtype=EVENTS_DTYPE)
+            dvs_events_conv["t"] = image.timestamp * 1e3  # Convert to microseconds
+            dvs_events_conv["x"] = dvs_events["x"]
+            dvs_events_conv["y"] = dvs_events["y"]
+            dvs_events_conv["p"] = dvs_events["pol"]
+            self.sensor_data = dvs_events_conv
             dvs_img = np.zeros((image.height, image.width, 3), dtype=np.uint8)
             # Blue is positive, red is negative
             dvs_img[
