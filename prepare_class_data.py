@@ -9,7 +9,6 @@ from src.classifier.data_io import load_folders, save_data
 from src.utils import crop_factor
 
 import src.config as config
-from src.looming_sim.default_settings import params
 
 import os
 
@@ -24,13 +23,17 @@ TH_CROP = 0.75
 
 threshold_func_compare = lambda x: (x >= TH_CROP)
 
-N_SAMPLES = 10000
+N_SAMPLES = 5000
 
 PREPROCESS = True
 
 MIN_EVENT_COUNT = 50
 
 NUM_THREADS = 5
+
+N_SUBDIV_X = 2
+N_SUBDIV_Y = 2
+HALF_STEP_TILES = True
 
 for fld in FOLDERS:
     box_events_folder = os.path.join(config.PATH_PROCESSED_DATA, "box_events", fld)
@@ -42,9 +45,9 @@ for fld in FOLDERS:
             box_events_folder,
             num_threads=NUM_THREADS,
             delta_t=DELTA_T,
-            n_subdiv_x=params["N_SUBDIV_X"],
-            n_subdiv_y=params["N_SUBDIV_Y"],
-            half_stride=params["HALF_STEP_TILES"],
+            n_subdiv_x=N_SUBDIV_X,
+            n_subdiv_y=N_SUBDIV_Y,
+            half_stride=HALF_STEP_TILES,
             min_event_count=MIN_EVENT_COUNT,
             compare_func_boxes=crop_factor,
             threshold_func_boxes=threshold_func_compare,
