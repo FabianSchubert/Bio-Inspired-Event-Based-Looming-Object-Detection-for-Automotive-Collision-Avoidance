@@ -2,7 +2,7 @@ import os
 
 ROOT_DIR = os.path.dirname(os.path.abspath(__file__))
 
-PATH_RAW_DATA = "/mnt/data0/prophesee_data/ATIS_Automotive_Detection_Dataset/"
+PATH_RAW_DATA = os.path.join(ROOT_DIR, "data/ATIS_Automotive_Detection_Dataset/")
 PATH_PROCESSED_DATA = os.path.join(ROOT_DIR, "data")
 
 BOXES_DTYPE = [

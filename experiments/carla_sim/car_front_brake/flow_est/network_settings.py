@@ -28,11 +28,11 @@ params = {
     "V_NORM_S": 1.0,
     "POS_NORM_REG_S": 1e2,
     #
-    "G_FILT_BIAS_OUT": 2.5e-8,
+    "G_FILT_BIAS_OUT": 1e-8,
     "G_FILT_SCALE_OUT": 1e-8,
     "OUTPUT_SCALE": 1e6,
 }
 
-params["NT_MAX"] = int(10000./params["DT_MS"])
+params["NT_MAX"] = int(20000./params["DT_MS"])
 
 params = FixedDict(params)
