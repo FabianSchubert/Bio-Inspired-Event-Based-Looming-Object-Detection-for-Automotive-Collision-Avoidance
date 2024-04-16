@@ -1,11 +1,13 @@
 import numpy as np
 import matplotlib.pyplot as plt
-from matplotlib.animation import FuncAnimation
+from matplotlib.animation import FuncAnimation, FFMpegWriter
 from matplotlib.axes import Axes
 from matplotlib.image import AxesImage
 from typing import Union
 
 import os
+
+plt.rcParams["animation.ffmpeg_path"] = "/usr/bin/ffmpeg"
 
 
 def gen_evt_hist(evts: np.ndarray, t: float, dt: float, w: int, h: int) -> np.ndarray:
@@ -48,6 +50,7 @@ def play_event_anim(
     w: int,
     h: int,
     save_frames: Union[None, str] = None,
+    save_video: Union[None, str] = None,
 ) -> None:
     fig, ax = plt.subplots()
 
@@ -80,6 +83,10 @@ def play_event_anim(
         fig, update, frames=frames_it, init_func=init, blit=True, interval=dt
     )
 
+    if save_video:
+        FFwriter = FFMpegWriter(fps=int(1e3 / dt))
+        ani.save(save_video, writer=FFwriter)
+
     plt.show()
 
 
@@ -92,6 +99,7 @@ def play_var_anim(
     vmin: float,
     vmax: float,
     save_frames: Union[None, str] = None,
+    save_video: Union[None, str] = None,
 ) -> None:
     fig, ax = plt.subplots()
 
@@ -134,5 +142,9 @@ def play_var_anim(
     ani = FuncAnimation(
         fig, update, frames=frames_it, init_func=init, blit=True, interval=dt_play
     )
+
+    if save_video:
+        FFwriter = FFMpegWriter(fps=int(1e3 / dt_play))
+        ani.save(save_video, writer=FFwriter)
 
     plt.show()

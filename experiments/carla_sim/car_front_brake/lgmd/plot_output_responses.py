@@ -46,7 +46,7 @@ for vehicle_class in vehicle_classes:
     for k in range(n_examples):
         res_fold = os.path.join(vehicle_class_fold, f"example_{k}")
 
-        res = np.load(os.path.join(res_fold, "flow_est/results.npz"))
+        res = np.load(os.path.join(res_fold, "lgmd/results.npz"))
 
         metadata = np.load(os.path.join(base_fold_event_data, vehicle_class, f"example_{k}/sim_data.npz"), allow_pickle=True)
         collision_time = metadata["collision_time"][()]

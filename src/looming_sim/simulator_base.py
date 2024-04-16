@@ -15,6 +15,8 @@ from itertools import product
 
 import sys
 
+from six import iteritems
+
 
 class Base_model(ABC):
     def __init__(self, p):
@@ -185,6 +187,27 @@ class Base_model(ABC):
                 self.pol_bm[idx].view(dtype=np.uint32)
             )
             self.input[idx].push_extra_global_param_to_device("polarityBitmask")
+
+    def free_input_egp(self):
+        for idx in range(self.n_tiles_x * self.n_tiles_y):
+            self.input[idx].extra_global_params["spikeBitmask"].view = None
+            self.input[idx].extra_global_params["polarityBitmask"].view = None
+            self.input[idx].unload()
+
+    def end(self):
+        """Free memory"""
+        for group in [
+            self.model.neuron_populations,
+            self.model.synapse_populations,
+            self.model.current_sources,
+            self.model.custom_updates,
+        ]:
+            for g_name, g_dat in iteritems(group):
+                for egp_name, egp_dat in iteritems(g_dat.extra_global_params):
+                    # if auto allocation is not enabled, let the user care
+                    # about freeing of the EGP
+                    if not egp_dat.is_scalar:
+                        self.model._slm.free_extra_global_param(g_name, egp_name)
 
     def run_model(
         self,

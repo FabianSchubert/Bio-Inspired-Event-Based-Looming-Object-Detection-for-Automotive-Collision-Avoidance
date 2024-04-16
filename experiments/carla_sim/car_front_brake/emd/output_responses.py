@@ -1,4 +1,4 @@
-from src.looming_sim.simulator_flow_est import FlowEst_model
+from src.looming_sim.emd.simulator_EMD import FlowEst_model
 
 from .network_settings import params
 

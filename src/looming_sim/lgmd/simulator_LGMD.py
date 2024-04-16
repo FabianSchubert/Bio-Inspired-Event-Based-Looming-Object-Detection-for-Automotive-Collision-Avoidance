@@ -1,5 +1,7 @@
 import numpy as np
 
+import os
+
 from pygenn import genn_model
 from pygenn.genn_wrapper import NO_DELAY
 from .models_lgmd import (
@@ -7,14 +9,18 @@ from .models_lgmd import (
     threshold_exp_curr,
 )
 
-from .models_generic import (
+from .network_settings import params
+
+from ..models_generic import (
     bitmask_array_current_source,
     p_neuron,
     lif_neuron,
     one_one_with_boundary,
 )
 
-from .simulator_base import Base_model
+from ..simulator_base import Base_model
+
+from src.utils import convert_spk_id_to_evt_array
 
 
 class LGMD_model(Base_model):
@@ -246,3 +252,120 @@ class LGMD_model(Base_model):
                 )
 
                 self.in_LGMD[-1].ps_target_var = "Isyn_i"
+
+
+def run_LGMD_sim(
+    evt_file,
+    save_fold,
+    t_end=None,
+    p=params.copy(),
+    results_filename="results.npz",
+    custom_params={},
+):
+    p["REC_SPIKES"] = ["P", "S", "LGMD"]
+
+    evts = np.load(evt_file)
+
+    if t_end is None:
+        t_end = evts["t"][-1]
+
+    p["NT_MAX"] = int(t_end / p["DT_MS"]) + 1
+
+    p.update(custom_params)
+
+    network = LGMD_model(p)
+
+    network.load_input_data_from_file(evt_file)
+    network.push_input_data_to_device()
+
+    rec_neurons = [("S", "V"), ("P", "V"), ("LGMD", "V")]
+    rec_dt = 10.0
+
+    spike_t, spike_ID, rec_vars_n, rec_n_t, rec_vars_s, rec_s_t = network.run_model(
+        0.0, t_end, rec_neurons=rec_neurons, rec_timestep=rec_dt
+    )
+
+    v_s = []
+    v_out = []
+    sp_p = []
+    sp_s = []
+    sp_out = []
+    for i in range(network.n_tiles_y):
+        v_s.append([])
+        v_out.append([])
+        sp_p.append([])
+        sp_s.append([])
+        sp_out.append([])
+        for j in range(network.n_tiles_x):
+            v_s[-1].append(
+                np.reshape(
+                    rec_vars_n[f"VS_{i}_{j}"],
+                    (-1, network.S_height, network.S_width),
+                )
+            )
+            v_out[-1].append(rec_vars_n[f"VLGMD_{i}_{j}"].flatten())
+
+            sp_p[-1].append(
+                convert_spk_id_to_evt_array(
+                    spike_ID[f"P_{i}_{j}"],
+                    spike_t[f"P_{i}_{j}"],
+                    network.tile_width,
+                    network.tile_height,
+                )
+            )
+            sp_p[-1].append(
+                convert_spk_id_to_evt_array(
+                    spike_ID[f"S_{i}_{j}"],
+                    spike_t[f"S_{i}_{j}"],
+                    network.S_width,
+                    network.S_height,
+                )
+            )
+            sp_out[-1].append(
+                convert_spk_id_to_evt_array(
+                    spike_ID[f"LGMD_{i}_{j}"],
+                    spike_t[f"LGMD_{i}_{j}"],
+                    1,
+                    1,
+                )
+            )
+
+    if (network.n_tiles_x == 1) and (network.n_tiles_y == 1):
+        sp_p = np.array(sp_p, dtype=sp_p[0][0].dtype)
+        sp_s = np.array(sp_s, dtype=sp_s[0][0].dtype)
+        sp_out = np.array(sp_out, dtype=sp_out[0][0].dtype)
+    else:
+        sp_p = np.array(sp_p, dtype=object)
+        sp_s = np.array(sp_s, dtype=object)
+        sp_out = np.array(sp_out, dtype=object)
+
+    if not os.path.exists(save_fold):
+        os.makedirs(save_fold)
+
+    np.savez(
+        os.path.join(save_fold, results_filename),
+        v_s=v_s,
+        v_out=v_out,
+        rec_n_t=rec_n_t,
+        sp_p=sp_p,
+        sp_s=sp_s,
+        sp_out=sp_out,
+    )
+
+    network.end()
+
+    network.free_input_egp()
+    network.model.unload()
+
+    network.model = None
+
+    network = None
+
+    spike_t = None
+    spike_ID = None
+    rec_vars_n = None
+    rec_n_t = None
+    rec_vars_s = None
+    rec_s_t = None
+
+    del network

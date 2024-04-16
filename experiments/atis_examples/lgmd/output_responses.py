@@ -1,4 +1,4 @@
-from src.looming_sim.simulator_LGMD import LGMD_model
+from src.looming_sim.lgmd.simulator_LGMD import LGMD_model
 
 from .network_settings import params
 

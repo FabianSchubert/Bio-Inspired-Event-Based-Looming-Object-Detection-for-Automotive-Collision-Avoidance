@@ -2,49 +2,24 @@
 Simulate a scenario
 """
 
+from typing import Union
+
 import carla
-from agents.navigation.basic_agent import BasicAgent
 
 import pygame
 
-import os
 
-from src.carla_synth.utils import CameraManager, HUD
+from src.carla_synth.utils import CameraManager
 from src.config import EVENTS_DTYPE
 
 import random
 
 import numpy as np
 
-from .network_settings import params
-from .flow_est import FlowEst
-from .mpl_multiproc import NBPlot
-
 
 WIDTH, HEIGHT = 304, 240
 
 FOV = 65.0
-
-
-# a list of tuples, each containing a command to execute, the arguments to
-# pass to that command, the keyword arguments to pass to that command, and
-# the time at which to execute that command.
-# Each time the simulation time exceeds the time given for the
-# first command in the list, it is executed and removed from the list.
-# This means that the commands should be in order of increasing time.
-"""
-directions = [
-    (vehicle_npc.set_autopilot, [True], {}, 1.0),
-    (vehicle_agent.set_autopilot, [True], {}, 1.0),
-    (vehicle_npc.set_autopilot, [False], {}, 7.0),
-    (vehicle_agent.set_autopilot, [False], {}, 7.0),
-    (
-        vehicle_npc.apply_control,
-        [carla.VehicleControl(throttle=0.0, brake=2.0)],
-        {},
-        4.0,
-    ),
-]"""
 
 
 def on_collision(event, ct, t0):
@@ -62,15 +37,19 @@ def gen_event_data_npc_car(
     spawn_point_npc: carla.Transform,
     n_bg_vehicles: int,
     vehicle_player_idx: int = 0,
-    vehicle_npc_idx: int = 0,
+    vehicle_npc_idx: Union[int, None] = None,
+    vehicle_npc_class: Union[str, list] = "car",
     t_cutoff: int = 0,
+    pg_display = None,
+    dim = (WIDTH, HEIGHT),
 ):
     t_cutoff = int(t_cutoff * 1e3)
 
-    pygame.font.init()
-
     client = carla.Client("localhost", 2000)
-    client.set_timeout(2.0)
+    client.set_timeout(15.0)
+
+    print(f"Carla Client Version: {client.get_client_version()}")
+    print(f"Carla Server Version: {client.get_server_version()}")
 
     actor_list = []
 
@@ -96,8 +75,6 @@ def gen_event_data_npc_car(
 
     actor_list.append(vehicle_player)
 
-    agent_player = BasicAgent(vehicle_player)
-
     # add collision sensor
     bp_col = blueprint_library.find("sensor.other.collision")
     col_sensor = world.spawn_actor(bp_col, carla.Transform(), attach_to=vehicle_player)
@@ -109,12 +86,23 @@ def gen_event_data_npc_car(
 
     col_sensor.listen(lambda event: on_collision(event, collision_time, t0_dvs))
 
-    hud = HUD(WIDTH, HEIGHT)
-
-    camera_manager = CameraManager(vehicle_player, hud, 2.2, FOV)
+    camera_manager = CameraManager(vehicle_player, dim[0], dim[1], 2.2, FOV)
     camera_manager.set_sensor(9, notify=False, force_respawn=True)
 
-    bp_car_npc = blueprint_library.filter("vehicle")[vehicle_npc_idx]
+    if isinstance(vehicle_npc_class, str):
+        vehicle_npc_class = [vehicle_npc_class]
+
+    print(f"Vehicle NPC class: {vehicle_npc_class}")
+
+    list_npc_vehicles = [bp for bp in blueprint_library.filter("vehicle") if bp.get_attribute("base_type").as_str() in vehicle_npc_class]
+    print(list_npc_vehicles)
+
+    if vehicle_npc_idx is None:
+        vehicle_npc_idx = random.choice(range(len(list_npc_vehicles)))
+    else:
+        vehicle_npc_idx = vehicle_npc_idx % len(list_npc_vehicles) # make sure the index is within the range by taking the modulo (cyclic)
+
+    bp_car_npc = list_npc_vehicles[vehicle_npc_idx]
 
     vehicle_npc = world.spawn_actor(bp_car_npc, spawn_point_npc)
 
@@ -122,28 +110,29 @@ def gen_event_data_npc_car(
 
     print(f"Vehicle NPC: {vehicle_npc}, index: {vehicle_npc_idx}")
 
-    agent_npc = BasicAgent(vehicle_npc)
-
     # we can not provide direct references to the actors and agents created in this function
     # from outside using the directions list, so we create a map to reference them using strings.
     obj_map = {
         "vehicle_player": vehicle_player,
         "vehicle_npc": vehicle_npc,
-        "agent_player": agent_player,
-        "agent_npc": agent_npc,
     }
 
     directions_map = {
         "set_autopilot": lambda args, kwargs: obj_map[args[0]].set_autopilot(args[1]),
         "apply_control": lambda args, kwargs: obj_map[args[0]].apply_control(args[1]),
         "set_desired_speed": lambda args, kwargs: tm.set_desired_speed(
-            obj_map[args[0]], args[1] # args[1] is the desired speed in km/h
+            obj_map[args[0]],
+            args[1],  # args[1] is the desired speed in km/h
         ),
-        "ignore_vehicles_percentage": lambda args, kwargs: tm.ignore_vehicles_percentage(
-            obj_map[args[0]], args[1] # args[1] is the percentage
+        "ignore_vehicles_percentage": lambda args,
+        kwargs: tm.ignore_vehicles_percentage(
+            obj_map[args[0]],
+            args[1],  # args[1] is the percentage
         ),
-        "distance_to_leading_vehicle": lambda args, kwargs: tm.distance_to_leading_vehicle(
-            obj_map[args[0]], args[1] # args[1] is the distance in meters
+        "distance_to_leading_vehicle": lambda args,
+        kwargs: tm.distance_to_leading_vehicle(
+            obj_map[args[0]],
+            args[1],  # args[1] is the distance in meters
         ),
     }
 
@@ -156,7 +145,7 @@ def gen_event_data_npc_car(
     tm.ignore_lights_percentage(vehicle_npc, 100)  # ignore traffic lights
     tm.ignore_signs_percentage(vehicle_npc, 100)  # ignore traffic signs
     tm.ignore_walkers_percentage(vehicle_npc, 100)  # ignore pedestrians
-    #tm.ignore_vehicles_percentage(vehicle_player, 100)  # ignore other vehicles
+    # tm.ignore_vehicles_percentage(vehicle_player, 100)  # ignore other vehicles
 
     spawn_points = world.get_map().get_spawn_points()
     n_spawn_points = len(spawn_points)
@@ -178,15 +167,16 @@ def gen_event_data_npc_car(
         except Exception as e:
             print(f"Failed to spawn vehicle {i}")
 
+    world.get_spectator().set_transform(vehicle_player.get_transform())
+
     #### main loop
+    show_sim = False
+    if pg_display is not None:
+        show_sim = True
+        pygame.init()
+        display = pg_display
 
-    pygame.init()
-
-    display = pygame.display.set_mode(
-        (WIDTH, HEIGHT), pygame.HWSURFACE | pygame.DOUBLEBUF
-    )
-
-    display.fill((0, 0, 0))
+        display.fill((0, 0, 0))
 
     t = 0.0
 
@@ -201,18 +191,15 @@ def gen_event_data_npc_car(
 
     idx_direction = 0
 
-    while t < t_run:
+    while t < t_run and collision_time[0] is None:
         t += dt_secs
 
         # print(f"t: {t}")
 
-        for event in pygame.event.get():
-            if event.type == pygame.QUIT:
-                pygame.quit()
-
-                print("Exiting...")
-
-                running = False
+        if show_sim:
+            for event in pygame.event.get():
+                if event.type == pygame.QUIT:
+                    running = False
 
         if not running:
             break
@@ -226,16 +213,15 @@ def gen_event_data_npc_car(
 
         world.tick()
 
-        # vehicle_player.apply_control(agent_player.run_step())
-        # vehicle_npc.apply_control(agent_npc.run_step())
-
-        camera_manager.render(display)
+        if show_sim:
+            camera_manager.render(display)
 
         dvs_events = camera_manager.sensor_data
         if dvs_events is not None:
             event_recording = np.append(event_recording, dvs_events)
 
-        pygame.display.flip()
+        if show_sim:
+            pygame.display.flip()
 
     event_recording["t"] -= t0_dvs
 
@@ -248,15 +234,13 @@ def gen_event_data_npc_car(
     camera_manager.sensor = None
     camera_manager.index = None
 
-    world.tick()
+    #tm.set_synchronous_mode(False)
 
-    tm.set_synchronous_mode(False)
-
-    # world_settings = world.get_settings()
-    world_settings.synchronous_mode = False
-    world_settings.fixed_delta_seconds = None
-    world.apply_settings(world_settings)
+    #world_settings = world.get_settings()
+    #world_settings.synchronous_mode = False
+    #world_settings.fixed_delta_seconds = None
+    #world.apply_settings(world_settings)
 
     print("collision time: ", collision_time[0])
 
-    return event_recording, collision_time[0]
+    return event_recording, collision_time[0], vehicle_npc_idx

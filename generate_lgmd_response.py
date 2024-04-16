@@ -1,4 +1,4 @@
-from src.looming_sim.simulator_LGMD import LGMD_model
+from src.looming_sim.lgmd.simulator_LGMD import LGMD_model
 from src.looming_sim.default_settings import params as p
 from src.looming_sim.format_spike_data import (
     convert_spike_id_events_to_spike_coord_events,

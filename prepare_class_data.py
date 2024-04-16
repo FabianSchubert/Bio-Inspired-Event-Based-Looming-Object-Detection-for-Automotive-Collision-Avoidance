@@ -18,14 +18,14 @@ FOLD_TEST = "test_a"
 
 FOLDERS = [FOLD_TRAIN, FOLD_VAL, FOLD_TEST]
 
-DELTA_T = 200000
+DELTA_T = 100000
 TH_CROP = 0.75
 
 threshold_func_compare = lambda x: (x >= TH_CROP)
 
-N_SAMPLES = 5000
+N_SAMPLES = 2500
 
-PREPROCESS = True
+PREPROCESS = False
 
 MIN_EVENT_COUNT = 50
 
@@ -56,11 +56,14 @@ for fld in FOLDERS:
     __import__("ipdb").set_trace()
 
     print("loading in processed data...")
-    data = load_folders(box_events_folder)
+    data = load_folders(
+        box_events_folder, load_events=False, load_boxes=True, return_filenames=True
+    )
 
+    __import__("ipdb").set_trace()
     print("balancing and pruning data...")
     data_bal_prune = lim_samples_rnd(
-        balance_oversample(balance_undersample(data)), N_SAMPLES
+        balance_oversample(balance_undersample(data, boxes_only=True)), N_SAMPLES
     )
 
     balanced_pruned_data_folder = os.path.join(
