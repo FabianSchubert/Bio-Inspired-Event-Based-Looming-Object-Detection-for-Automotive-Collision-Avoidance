@@ -47,7 +47,7 @@ params = {
     "MAX_INPUT_SPIKES": 100000000,
     # S settings
     "TAU_MEM_S": 50.0,
-    "V_THRESH_S": 1.0,
+    "V_THRESH_S": 0.25,
     "V_RESET_S": 0.0,
     # LGMD settings
     "TAU_MEM_LGMD": 150.0,

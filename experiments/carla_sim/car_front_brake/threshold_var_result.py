@@ -23,27 +23,14 @@ vehicle_classes = ["cars", "two_wheel", "trucks"]
 
 n_tiles = [2, 3, 4]
 
-MIN_MIN_REACTION_TIME_MS = 1000.0
-MAX_MIN_REACTION_TIME_MS = 2500.0
+MIN_MIN_REACTION_TIME_MS = 500.0
+MAX_MIN_REACTION_TIME_MS = 2000.0
 
-MAX_REACTION_TIME_MS = 20000.0
+MAX_REACTION_TIME_MS = 8000.0
 
-N_SUBDIV = 4
-N_TILES_DISCARD_TOP = 1
+N_SUBDIV = 3
+N_TILES_DISCARD_TOP = 2
 N_TILES_DISCARD_BOTTOM = 1
-
-
-df_stats_response = pd.DataFrame(
-    columns=[
-        "vehicle_class",
-        "model",
-        "n_tiles",
-        "example",
-        # "threshold",
-        "correct response",
-        "score",
-    ]
-)
 
 
 def calc_pr_curve(
@@ -106,17 +93,14 @@ def calc_pr_curve(
                         os.path.join(results_fold, "results.npz"), allow_pickle=True
                     )
 
-                rec_t = results_data["rec_n_t"]
+                rec_t = results_data["rec_n_t"] - collision_time
 
                 v_out = results_data["v_out"]
                 v_out_filt = v_out[
-                    n_tiles_discard_top:v_out.shape[0] - n_tiles_discard_bottom,
+                    n_tiles_discard_top : v_out.shape[0] - n_tiles_discard_bottom,
                     :,
-                    (rec_t <= (collision_time - min_reaction_time_before_collision_ms))
-                    * (
-                        rec_t
-                        >= (collision_time - max_reaction_time_before_collision_ms)
-                    ),
+                    (rec_t <= -min_reaction_time_before_collision_ms)
+                    * (rec_t >= -max_reaction_time_before_collision_ms),
                 ]
 
                 v_out_filt_flat = v_out_filt.flatten()
@@ -195,7 +179,7 @@ def calc_pr_curve(
 
 fig, ax = plt.subplots(2, 3, figsize=(9, 5))
 
-vhc = "cars"  # vehicle_classes
+vhc = "cars"
 
 
 for min_rt in np.linspace(MIN_MIN_REACTION_TIME_MS, MAX_MIN_REACTION_TIME_MS, 20):
