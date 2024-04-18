@@ -138,7 +138,7 @@ def extract_events_from_boxes(
     evt_file: str,
     box_file: str | None = None,
     delta_t: float | int = 100000,  # microsecs!!!
-    compare_func_boxes: Callable = crop_factor,
+    compare_func_boxes: Callable = iou,
     threshold_func_boxes: Callable[np.ndarray, np.ndarray] = th_func_boxes_default,
     n_subdiv_x: int = 4,
     n_subdiv_y: int = 4,

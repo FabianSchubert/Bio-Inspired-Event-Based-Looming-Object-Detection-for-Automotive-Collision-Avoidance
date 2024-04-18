@@ -25,9 +25,14 @@ class EventDataSet:
         self,
         folders: list,
         event_cache_size: int = 1000,
+        file_cache_size: int = 20,
         max_samples_per_class: Union[int, None] = None,
+        print_retr_items: bool = False,
     ):
         self.folders = folders
+
+        self.retr_items = 0
+        self.print_retr_items = print_retr_items
 
         self.folders_to_files = {}
         self.files_to_boxes = {}
@@ -48,6 +53,10 @@ class EventDataSet:
         self.event_cache = {}
         self.event_cache_size = event_cache_size
         self.getitem_hist = []
+
+        self.file_cache = {}
+        self.file_cache_size = file_cache_size
+        self.file_cache_hist = []
 
         # create a weighted random sampler for balanced training
         # the sampler needs to be passed to a dataloader.
@@ -89,7 +98,9 @@ class EventDataSet:
         self.samples_labels, self.unique_labels, self.label_count = self.get_labels()
 
         # create a dictionary with the weights for each label (inverses of the label count)
-        self.unique_labels_weight = dict(zip(self.unique_labels, 1 / self.label_count))
+        self.unique_labels_weight = dict(
+            zip(self.unique_labels, self.num_samples / self.label_count)
+        )
 
         # create a list with the weights for each sample
         self.samples_labels_weight = np.array(
@@ -118,6 +129,9 @@ class EventDataSet:
         return samples_labels, unique_labels, label_count
 
     def __getitem__(self, index):
+        self.retr_items += 1
+        if self.print_retr_items:
+            print("Retrieved items", self.retr_items)
         # cache a limited number of samples
         if index in self.event_cache:
             return self.event_cache[index]
@@ -131,7 +145,19 @@ class EventDataSet:
 
     def load_file(self, index):
         fl, box, boxidx = self.idx_to_files_boxes_box_idx[index]
-        events = np.load(fl + "_td.npy", allow_pickle=True)[boxidx]
+
+        if fl in self.file_cache:
+            # print("File in cache")
+            eventfl = self.file_cache[fl]
+        else:
+            if len(self.file_cache) == self.file_cache_size:
+                self.file_cache.pop(self.file_cache_hist.pop(0))
+            eventfl = np.load(fl + "_td.npy", allow_pickle=True)
+            self.file_cache[fl] = eventfl
+            self.file_cache_hist.append(fl)
+
+        events = eventfl[boxidx]
+
         return events, box[5]
 
     def __len__(self):

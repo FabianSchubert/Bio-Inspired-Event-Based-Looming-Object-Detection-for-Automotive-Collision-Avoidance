@@ -2,7 +2,6 @@ from src.classifier.network import generate_full_conn_network, generate_cnn_netw
 from src.classifier.data_io import load_file
 from src.classifier.train import train_network
 from src.classifier.augmentation import ComposeAugment, FlipHorizontal, Crop
-from src.classifier.dataset import EventDataSet
 
 from ml_genn.optimisers import Adam  # type: ignore
 
@@ -14,8 +13,15 @@ WIDTH, HEIGHT = 304, 240
 
 N_SUBDIV = 2
 
-dataset_train = EventDataSet([f"./data/box_events/{N_SUBDIV}_tiles/train_a/"], max_samples_per_class=5000)
-dataset_val = EventDataSet([f"./data/box_events/{N_SUBDIV}_tiles/val_a/"], max_samples_per_class=1000)
+dataset_train = np.load(f"./data/box_events/{N_SUBDIV}_tiles/train_a/data_samples.npz", allow_pickle=True)
+print("loading training data...")
+dataset_train = [dataset_train[key] for key in dataset_train.keys()]
+print("done")
+
+dataset_val = np.load(f"./data/box_events/{N_SUBDIV}_tiles/val_a/data_samples.npz", allow_pickle=True)
+print("loading validation data...")
+dataset_val = [dataset_val[key] for key in dataset_val.keys()]
+print("done")
 
 #data_train = load_file("./data/balanced_pruned/train_a_td.npy")
 #data_val = load_file("./data/balanced_pruned/val_a_td.npy")
@@ -35,7 +41,7 @@ INPUT_SIZE = (INPUT_HEIGHT, INPUT_WIDTH, 1)  # ml genn wants this ordering
 
 GPU_ID = None
 
-GENN_KWARGS = {"selectGPUByDeviceID": True}
+GENN_KWARGS = {"selectGPUByDeviceID": True, "backend": "CUDA"}
 if GPU_ID is not None:
     GENN_KWARGS["deviceSelectMethod"] = DeviceSelect_MANUAL
     GENN_KWARGS["manualDeviceID"] = GPU_ID
@@ -45,10 +51,10 @@ COMPILER_ARGS = {
     "reg_lambda_upper": 4e-9,
     "reg_lambda_lower": 4e-9,
     "reg_nu_upper": 5,
-    "max_spikes": 1500,
+    "max_spikes": 2500,
     "optimiser": Adam(0.002),
-    "batch_size": 32,
-    "kernel_profiling": True,
+    "batch_size": 4,
+    "kernel_profiling": False,
     **GENN_KWARGS,
 }
 
@@ -60,15 +66,17 @@ augment_pipe = ComposeAugment(
 )
 
 # net = generate_full_conn_network(N_IN, N_HIDDEN, N_OUT, recurrent=True)
-net = generate_cnn_network(INPUT_SIZE, N_HIDDEN, N_OUT)
+print("generating network...")
+net = generate_cnn_network(INPUT_SIZE, N_HIDDEN, N_OUT, max_spikes=1500000, record_spikes=[False, False, False])
 
+print("training network...")
 train_network(
     net,
     dataset_train,
     dataset_val,
     SENSOR_SIZE,
     N_EPOCHS,
-    augmentation=None,  # augment_pipe,
+    augmentation=augment_pipe,
     **COMPILER_ARGS
 )
 

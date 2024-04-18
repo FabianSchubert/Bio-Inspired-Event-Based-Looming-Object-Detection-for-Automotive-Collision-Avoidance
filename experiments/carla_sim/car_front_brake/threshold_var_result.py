@@ -2,6 +2,8 @@ import numpy as np
 
 from .settings import base_fold_results, base_fold_input_data
 
+from src.config import ROOT_DIR
+
 import os
 
 import pandas as pd
@@ -12,6 +14,12 @@ from matplotlib import colormaps
 import seaborn as sns
 
 from sklearn.metrics import precision_recall_curve
+
+from src.classifier.utils.spike_to_img import gen_img_arr
+
+import torch
+from torchvision.models import resnet18
+from torch.nn import Linear, Conv2d
 
 plt.style.use(
     "https://raw.githubusercontent.com/FabianSchubert/mpl_style/main/custom_style.mplstyle"
@@ -32,6 +40,159 @@ N_SUBDIV = 3
 N_TILES_DISCARD_TOP = 2
 N_TILES_DISCARD_BOTTOM = 1
 
+WIDTH, HEIGHT = 304, 240
+
+rsn = resnet18(pretrained=False)
+rsn.fc = Linear(512, 3)
+rsn.conv1 = Conv2d(
+    1, 64, kernel_size=(7, 7), stride=(2, 2), padding=(3, 3), bias=False
+)
+
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+rsn.to(device)
+
+rsn.load_state_dict(torch.load(os.path.join(ROOT_DIR, "../resnet18_atis.pt")))
+
+
+def calc_pr_curve_with_classifier(
+    vehicle_classes,
+    model,
+    n_tile,
+    min_reaction_time_before_collision_ms,
+    max_reaction_time_before_collision_ms,
+    th_range,
+    delta_t_ms=100.0,
+    return_f1=False,
+    n_tiles_discard_top=0,
+    n_tiles_discard_bottom=0,
+):
+    if not isinstance(vehicle_classes, list):
+        vehicle_classes = [vehicle_classes]
+
+    responses = []
+
+    for vehicle_class in vehicle_classes:
+        base_fold_sim_data = os.path.join(base_fold_input_data, vehicle_class)
+
+        base_fold_results_vehicle = os.path.join(
+            base_fold_results, vehicle_class, model, f"{n_tile}_tiles/"
+        )
+
+        n_examples = len(os.listdir(base_fold_results_vehicle))
+
+        for i in range(n_examples):
+            results_fold = os.path.join(base_fold_results_vehicle, f"example_{i}")
+            sim_data_fold = os.path.join(base_fold_sim_data, f"example_{i}")
+
+            sim_data = np.load(
+                os.path.join(sim_data_fold, "sim_data.npz"), allow_pickle=True
+            )
+
+            collision_time = sim_data["collision_time"][()]
+
+            if collision_time is None:
+                print(
+                    f"Collision time is None for {vehicle_class}, {model}, {n_tile} tiles, example {i}"
+                )
+                continue
+
+            for is_baseline in [True, False]:
+                if is_baseline:
+                    results_data = np.load(
+                        os.path.join(results_fold, "results_baseline.npz"),
+                        allow_pickle=True,
+                    )
+                else:
+                    results_data = np.load(
+                        os.path.join(results_fold, "results.npz"), allow_pickle=True
+                    )
+
+                rec_t_original = results_data["rec_n_t"]
+                rec_t = results_data["rec_n_t"] - collision_time
+
+                v_out = results_data["v_out"]
+                v_out_filt = v_out[
+                    n_tiles_discard_top : v_out.shape[0] - n_tiles_discard_bottom,
+                    :,
+                    (rec_t <= -min_reaction_time_before_collision_ms)
+                    * (rec_t >= -max_reaction_time_before_collision_ms),
+                ]
+
+                responses.append(
+                    {
+                        "vehicle_class": vehicle_class,
+                        "model": model,
+                        "n_tiles": n_tile,
+                        "example": i,
+                        "correct_response": int(not is_baseline),
+                        "response": v_out_filt,
+                        "t": rec_t[
+                            (rec_t <= -min_reaction_time_before_collision_ms)
+                            * (rec_t >= -max_reaction_time_before_collision_ms)
+                        ],
+                        "t_original": rec_t_original[
+                            (rec_t <= -min_reaction_time_before_collision_ms)
+                            * (rec_t >= -max_reaction_time_before_collision_ms)
+                        ],
+                    }
+                )
+
+    pr = []
+    rc = []
+    acc = []
+
+    true_label = [sample["correct_response"] for sample in responses]
+
+    for i, th in enumerate(th_range):
+        predicted_labels = []
+
+        for response in responses:
+            v_out_bin = 1.0 * (response["response"] >= th)
+            if np.sum(v_out_bin) == 0:
+                predicted_labels.append(0)
+            else:
+                pos_resp_pos = np.where(v_out_bin)
+                idx_earliest = np.argmin(pos_resp_pos[2])
+                idx_y = pos_resp_pos[0][idx_earliest] + n_tiles_discard_top
+                idx_x = pos_resp_pos[1][idx_earliest]
+                idx_t = pos_resp_pos[2][idx_earliest]
+
+                t_ms = response["t_original"][idx_t]
+
+                # load in original event data
+                evt_data_fold = os.path.join(
+                    base_fold_input_data,
+                    response["vehicle_class"],
+                    f"example_{response['example']}",
+                )
+
+                evt_data = np.load(
+                    os.path.join(evt_data_fold, "events.npy"), allow_pickle=True
+                )
+
+                xleft = idx_x * WIDTH // n_tile
+                xright = (idx_x + 1) * WIDTH // n_tile
+                ytop = idx_y * HEIGHT // n_tile
+                ybottom = (idx_y + 1) * HEIGHT // n_tile
+
+                evt_data_filt = evt_data[
+                    (evt_data["t"] >= t_ms - delta_t_ms)
+                    * (evt_data["t"] <= t_ms)
+                    * (evt_data["x"] >= xleft)
+                    * (evt_data["x"] <= xright)
+                    * (evt_data["y"] >= ytop)
+                    * (evt_data["y"] <= ybottom)
+                ].copy()
+                evt_data_filt["x"] -= xleft
+                evt_data_filt["y"] -= ytop
+                evt_data_filt["t"] -= int(t_ms - delta_t_ms)
+
+                img_arr = gen_img_arr(evt_data_filt, WIDTH // n_tile, HEIGHT // n_tile, dt_microsecs=delta_t_ms)
+
+                import pdb; pdb.set_trace()
+
+
 
 def calc_pr_curve(
     vehicle_classes,
@@ -40,6 +201,7 @@ def calc_pr_curve(
     min_reaction_time_before_collision_ms,
     max_reaction_time_before_collision_ms,
     return_f1=False,
+    return_accuracy=False,
     n_tiles_discard_top=0,
     n_tiles_discard_bottom=0,
 ):
@@ -105,39 +267,6 @@ def calc_pr_curve(
 
                 v_out_filt_flat = v_out_filt.flatten()
 
-                """
-                # for each threshold value in V_OUT_THRESHOLD_EMD, calculate
-                # if v_out_filt_flat is anywhere above the threshold and store
-                # the results in a boolean array
-                if model == "EMD":
-                    th_arr = V_OUT_THRESHOLD_EMD
-                else:
-                    th_arr = V_OUT_THRESHOLD_LGMD
-
-                above_threshold = np.array(
-                    [np.any(v_out_filt_flat >= threshold) for threshold in th_arr]
-                )
-
-                if is_baseline:
-                    response_type = [
-                        "FP" if resp else "TN" for resp in above_threshold
-                    ]
-                else:
-                    response_type = [
-                        "TP" if resp else "FN" for resp in above_threshold
-                    ]
-
-                new_data = pd.DataFrame(
-                    {
-                        "vehicle_class": vehicle_class,
-                        "model": model,
-                        "n_tiles": n_tile,
-                        "example": i,
-                        "threshold": th_arr,
-                        "response type": response_type,
-                    }
-                )"""
-
                 new_data = pd.DataFrame(
                     {
                         "vehicle_class": vehicle_class,
@@ -168,18 +297,38 @@ def calc_pr_curve(
         df_stats_response["correct response"], df_stats_response["score"]
     )
 
+    results = pr, rc, th
+
+    if return_accuracy:
+        acc = []
+        for _th in th:
+            acc.append(
+                np.mean(
+                    df_stats_response["correct response"]
+                    == (df_stats_response["score"] >= _th)
+                )
+            )
+        results.append(acc)
+
     if return_f1:
         f1 = 2 * pr * rc / (pr + rc)
+        results.append(f1)
 
-        return pr, rc, th, f1
-
-    else:
-        return pr, rc, th
+    return results
 
 
 fig, ax = plt.subplots(2, 3, figsize=(9, 5))
 
 vhc = "cars"
+
+calc_pr_curve_with_classifier(
+    vhc,
+    "EMD",
+    N_SUBDIV,
+    MIN_MIN_REACTION_TIME_MS,
+    MAX_REACTION_TIME_MS,
+    np.linspace(0, 8e-8, 100),
+)
 
 
 for min_rt in np.linspace(MIN_MIN_REACTION_TIME_MS, MAX_MIN_REACTION_TIME_MS, 20):

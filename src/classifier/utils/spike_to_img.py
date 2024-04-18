@@ -31,8 +31,7 @@ def gen_label_arr(
 class AtisImageDataset(Dataset):
     def __init__(
         self,
-        event_sequence: str | list,
-        boxes: str | list,
+        dataset: str | list,
         width: int,
         height: int,
         t0_microsecs: float = 0.0,
@@ -41,21 +40,17 @@ class AtisImageDataset(Dataset):
     ):
         super().__init__()
 
-        if isinstance(event_sequence, str):
-            event_sequence = np.load(event_sequence, allow_pickle=True)
-        else:
-            event_sequence = np.array(event_sequence)
-        
-        if isinstance(boxes, str):
-            boxes = np.load(boxes, allow_pickle=True)
-        else:
-            boxes = np.array(boxes)
+        if isinstance(dataset, str):
+            dataset = np.load(dataset, allow_pickle=True)
+            dataset = [dataset[key] for key in dataset.keys()]
+
+        event_sequence = dataset[0]
+        self.label_arr = torch.tensor(dataset[1], dtype=torch.int64)
 
         self.img_arr = gen_img_arr(
             event_sequence, width, height, t0_microsecs, dt_microsecs
         )
         self.img_arr = torch.unsqueeze(torch.tensor(self.img_arr, dtype=torch.float32), 1)
-        self.label_arr = torch.tensor(gen_label_arr(boxes), dtype=torch.int64)
 
         self.transform = transform
 

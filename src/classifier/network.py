@@ -15,7 +15,7 @@ from ml_genn.synapses import Exponential
 from src.classifier.utils.connectivity import gabor_filters
 
 DEFAULT_KERNEL_SIZE = (10, 10)
-DEFAULT_NUM_FILTERS = 10
+DEFAULT_NUM_FILTERS = 3
 
 DEFAULT_KERNEL = gabor_filters(*DEFAULT_KERNEL_SIZE, DEFAULT_NUM_FILTERS)
 # DEFAULT_KERNEL = Normal(mean=0.01, sd=0.01)
@@ -28,8 +28,8 @@ def generate_cnn_network(
     conv_params: dict = {
         "weight_init": DEFAULT_KERNEL,
         "kern_size": DEFAULT_KERNEL_SIZE,  # height, width!
-        "stride": (1, 1),  # stride height, stride width
-        "padding": "valid",  # "valid" or "same"
+        "stride": (2, 2),  # stride height, stride width
+        "padding": "same",  # "valid" or "same"
         "filters": DEFAULT_NUM_FILTERS,  # number of output channels / filters
     },
     recurrent: bool = True,
