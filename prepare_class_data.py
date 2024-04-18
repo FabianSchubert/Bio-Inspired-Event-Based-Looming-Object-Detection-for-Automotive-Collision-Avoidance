@@ -18,11 +18,10 @@ FOLD_TEST = "test_a"
 
 FOLDERS = [FOLD_TRAIN, FOLD_VAL, FOLD_TEST]
 
-DELTA_T_MICROSECS = 100000 # microseconds
+DELTA_T_MICROSECS = 100000  # microseconds
 TH_CROP = 0.75
 
 threshold_func_compare = lambda x: (x >= TH_CROP)
-
 
 PREPROCESS = True
 
@@ -30,12 +29,11 @@ MIN_EVENT_COUNT = 50
 
 NUM_THREADS = 5
 
-N_SUBDIV_X = 2
-N_SUBDIV_Y = 2
+N_SUBDIV = 2
 HALF_STEP_TILES = True
 
 for fld in FOLDERS:
-    box_events_folder = os.path.join(config.PATH_PROCESSED_DATA, "box_events", fld)
+    box_events_folder = os.path.join(config.PATH_PROCESSED_DATA, "box_events", f"{N_SUBDIV}_tiles", fld)
 
     if PREPROCESS:
         print(f"processing raw data from {fld}...")
@@ -44,8 +42,8 @@ for fld in FOLDERS:
             box_events_folder,
             num_threads=NUM_THREADS,
             delta_t=DELTA_T_MICROSECS,
-            n_subdiv_x=N_SUBDIV_X,
-            n_subdiv_y=N_SUBDIV_Y,
+            n_subdiv_x=N_SUBDIV,
+            n_subdiv_y=N_SUBDIV,
             half_stride=HALF_STEP_TILES,
             min_event_count=MIN_EVENT_COUNT,
             compare_func_boxes=crop_factor,

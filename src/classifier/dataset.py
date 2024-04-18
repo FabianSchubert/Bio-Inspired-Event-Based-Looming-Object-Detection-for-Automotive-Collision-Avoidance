@@ -8,16 +8,25 @@ import torch
 
 from torch.utils.data.sampler import WeightedRandomSampler
 
+from typing import Union
+
+
 def list_collate_fn(list_items):
-     x = []
-     y = []
-     for x_, y_ in list_items:
-         x.append(x_)
-         y.append(y_)
-     return x, y
+    x = []
+    y = []
+    for x_, y_ in list_items:
+        x.append(x_)
+        y.append(y_)
+    return x, y
+
 
 class EventDataSet:
-    def __init__(self, folders: list, event_cache_size: int = 1000):
+    def __init__(
+        self,
+        folders: list,
+        event_cache_size: int = 1000,
+        max_samples_per_class: Union[int, None] = None,
+    ):
         self.folders = folders
 
         self.folders_to_files = {}
@@ -36,8 +45,6 @@ class EventDataSet:
                     self.idx_to_files_boxes_box_idx[i] = (fl, box, j)
                     i += 1
 
-        self.num_samples = len(self.idx_to_files_boxes_box_idx)
-
         self.event_cache = {}
         self.event_cache_size = event_cache_size
         self.getitem_hist = []
@@ -55,15 +62,60 @@ class EventDataSet:
         self.unique_labels, self.label_count = np.unique(
             self.samples_labels, return_counts=True
         )
+
+        self.samples_labels, self.unique_labels, self.label_count = self.get_labels()
+
+        if max_samples_per_class is not None:
+            # limit the number of samples per class
+            idxs_to_remove = np.zeros(self.num_samples, dtype=bool)
+            for label in self.unique_labels:
+                print("Label", label)
+                idxs = np.where(self.samples_labels == label)[0]
+                if len(idxs) > max_samples_per_class:
+                    np.random.shuffle(idxs)
+                    idxs_to_remove[idxs[max_samples_per_class:]] = True
+
+        # filter out the samples that are to be removed
+        _new_items = [
+            v
+            for k, v in self.idx_to_files_boxes_box_idx.items()
+            if not idxs_to_remove[k]
+        ]
+
+        # create new "hash map"
+        self.idx_to_files_boxes_box_idx = dict(zip(range(len(_new_items)), _new_items))
+
+        # update the samples_labels, unique_labels, label_count
+        self.samples_labels, self.unique_labels, self.label_count = self.get_labels()
+
+        # create a dictionary with the weights for each label (inverses of the label count)
         self.unique_labels_weight = dict(zip(self.unique_labels, 1 / self.label_count))
 
+        # create a list with the weights for each sample
         self.samples_labels_weight = np.array(
             [self.unique_labels_weight[label] for label in self.samples_labels]
         )
 
         self.samples_labels_weight = torch.from_numpy(self.samples_labels_weight)
         self.samples_labels_weight = self.samples_labels_weight.double()
-        self.balanced_sampler = WeightedRandomSampler(self.samples_labels_weight, self.num_samples)
+        self.balanced_sampler = WeightedRandomSampler(
+            self.samples_labels_weight, self.num_samples
+        )
+
+    @property
+    def num_samples(self):
+        return len(self.idx_to_files_boxes_box_idx)
+
+    def get_labels(self):
+        samples_labels = []
+        for i in range(self.num_samples):
+            fl, box, boxidx = self.idx_to_files_boxes_box_idx[i]
+            samples_labels.append(box[5])
+        samples_labels = np.array(samples_labels).astype(int)
+
+        unique_labels, label_count = np.unique(samples_labels, return_counts=True)
+
+        return samples_labels, unique_labels, label_count
 
     def __getitem__(self, index):
         # cache a limited number of samples
@@ -84,3 +136,12 @@ class EventDataSet:
 
     def __len__(self):
         return self.num_samples
+
+
+if __name__ == "__main__":
+    dataset = EventDataSet(
+        ["../../data/box_events/train_a/"], max_samples_per_class=9000
+    )
+    print(len(dataset))
+    print(dataset.label_count)
+    # print(dataset[0])
