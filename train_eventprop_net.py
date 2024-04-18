@@ -1,8 +1,8 @@
-from src.looming_sim.default_settings import params as def_params
 from src.classifier.network import generate_full_conn_network, generate_cnn_network
 from src.classifier.data_io import load_file
 from src.classifier.train import train_network
 from src.classifier.augmentation import ComposeAugment, FlipHorizontal, Crop
+from src.classifier.dataset import EventDataSet
 
 from ml_genn.optimisers import Adam  # type: ignore
 
@@ -10,11 +10,18 @@ from pygenn.genn_wrapper.CUDABackend import DeviceSelect_MANUAL
 
 import numpy as np
 
-data_train = load_file("./data/balanced_pruned/train_a_td.npy")
-data_val = load_file("./data/balanced_pruned/val_a_td.npy")
+WIDTH, HEIGHT = 304, 240
 
-INPUT_WIDTH = int(def_params["INPUT_WIDTH"] / def_params["N_SUBDIV_X"])
-INPUT_HEIGHT = int(def_params["INPUT_HEIGHT"] / def_params["N_SUBDIV_Y"])
+N_SUBDIV = 2
+
+dataset_train = EventDataSet([f"./data/box_events/{N_SUBDIV}_tiles/train_a/"], max_samples_per_class=5000)
+dataset_val = EventDataSet([f"./data/box_events/{N_SUBDIV}_tiles/val_a/"], max_samples_per_class=1000)
+
+#data_train = load_file("./data/balanced_pruned/train_a_td.npy")
+#data_val = load_file("./data/balanced_pruned/val_a_td.npy")
+
+INPUT_WIDTH = int(WIDTH / N_SUBDIV)
+INPUT_HEIGHT = int(HEIGHT / N_SUBDIV)
 
 N_IN = INPUT_WIDTH * INPUT_HEIGHT
 N_HIDDEN = 512
@@ -57,8 +64,8 @@ net = generate_cnn_network(INPUT_SIZE, N_HIDDEN, N_OUT)
 
 train_network(
     net,
-    data_train,
-    data_val,
+    dataset_train,
+    dataset_val,
     SENSOR_SIZE,
     N_EPOCHS,
     augmentation=None,  # augment_pipe,

@@ -18,6 +18,10 @@ import os
 
 import pandas as pd
 
+from dataset import EventDataSet, list_collate_fn
+
+from torch.utils.data import DataLoader
+
 DT = 1.0
 
 
@@ -61,8 +65,10 @@ class ResultLogger:
 
 def train_network(
     network: Network,
-    data_train: list[tuple],
-    data_val: list[tuple],
+    #data_train: list[tuple],
+    #data_val: list[tuple],
+    dataset_train: EventDataSet,
+    dataset_val: EventDataSet,
     sensor_size: tuple[int, int, int],
     n_epochs: int,
     shuffle: bool = True,
@@ -80,16 +86,29 @@ def train_network(
     else:
         del resfile_path
 
+    dataloader_train = DataLoader(
+        dataset_train,
+        batch_size=dataset_train.num_samples,
+        sampler=dataset_train.balanced_sampler)
+    
+    data_train = next(iter(dataloader_train))
+
+    dataloader_val = DataLoader(
+        dataset_val,
+        batch_size=dataset_val.num_samples,
+        sampler=dataset_val.balanced_sampler)
+    
+    data_val = next(iter(dataloader_val))
+
     evts_train, labels_train = (
         [dat[0] for dat in data_train],
-        [dat[1]["class_id"] for dat in data_train],
+        [dat[1] for dat in data_train],
     )
     evts_val, labels_val = (
         [dat[0] for dat in data_val],
-        [dat[1]["class_id"] for dat in data_val],
+        [dat[1] for dat in data_val],
     )
 
-    num_output = np.unique(labels_train).max().astype(int) + 1
     max_spikes = 0
     latest_spike_time = 0.0
     if len(data_train) > 0:
@@ -145,8 +164,6 @@ def train_network(
                 validation_x={input_pop: spikes_val},
                 validation_y={output_pop: labels_val},
             )
-
-            __import__("ipdb").set_trace()
 
             if save_results:
                 res_logger.update(
