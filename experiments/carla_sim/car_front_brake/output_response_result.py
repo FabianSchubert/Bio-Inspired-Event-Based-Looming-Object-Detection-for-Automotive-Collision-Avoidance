@@ -121,13 +121,13 @@ def get_output_responses(
 
     return df_response
 
-N_SUBDIV = 2
-N_TILES_DISCARD_TOP = 1
-N_TILES_DISCARD_BOTTOM = 1
+N_SUBDIV = 4
+N_TILES_DISCARD_TOP = 3
+N_TILES_DISCARD_BOTTOM = 2
 
 T_MAX = 8000.0
 
-MODEL = "EMD"
+MODEL = "LGMD"
 VEHICLE_CLASSES = vehicle_classes
 
 ylim = {"LGMD": 20., "EMD": 0.75e-7}

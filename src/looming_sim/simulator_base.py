@@ -17,6 +17,8 @@ import sys
 
 from six import iteritems
 
+from time import time_ns
+
 
 class Base_model(ABC):
     def __init__(self, p):
@@ -218,6 +220,7 @@ class Base_model(ABC):
         rec_synapses=[],
         timing=True,
         rec_timestep=1.0,
+        measure_sim_speed=False,
     ):
         """
         Method to run the GeNN model. You may provide new event data by passing
@@ -263,6 +266,9 @@ class Base_model(ABC):
         # NOTE: should we reset variables of neurons and/or synapses before the run?
 
         t_next_rec = 0.0
+
+        if measure_sim_speed:
+            start = time_ns()
 
         while self.model.t <= t_start_ms + trial_ms:
             self.model.step_time()
@@ -319,6 +325,12 @@ class Base_model(ABC):
             if self.model.timestep % 1000 == 0:
                 sys.stdout.write(f"t: {self.model.t}\r")
         # end of simulation loop
+
+        if measure_sim_speed:
+            end = time_ns()
+            num_steps = self.model.timestep - int(t_start_ms / self.model.dT)
+            fps = num_steps * 1e9 / (end - start)
+            print(f"FPS: {fps}")
 
         # convert neuron and synapse recordings to 2d-arrays
         for key in rec_vars_n:

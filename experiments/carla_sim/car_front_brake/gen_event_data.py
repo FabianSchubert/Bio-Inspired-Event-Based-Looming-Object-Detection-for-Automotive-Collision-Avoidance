@@ -33,12 +33,12 @@ N_EXAMPLES_PER_VEHICLE_CLASS = 10
 T_BRAKE = 10.0 # when the NPC vehicle starts braking
 T_CROSS = 3.5 # when the pedestrian starts crossing
 T_END = 15.0
-DT = 0.01 # 100 Hz
+DT = 0.05 # 100 Hz
 
 TARGET_VEL_KMH = 15.0  # km/h
 MIN_DIST_LEADING_VEHICLE = 10.0  # meters
 
-SAVE = True
+SAVE = False
 
 N_EXTRA_NPC_VEHICLES_CAR_FRONT = 20
 N_EXTRA_NPC_VEHICLES_PEDESTRIAN_CROSS = 0
@@ -315,10 +315,10 @@ def run_no_npc(
         )
 
 
-#pygame.init()
-#display = pygame.display.set_mode((WIDTH, HEIGHT))
+pygame.init()
+display = pygame.display.set_mode((WIDTH, HEIGHT))
 
-"""
+#"""
 for vehicle_class, i in product(
     VEHICLE_CLASSES.keys(), range(N_EXAMPLES_PER_VEHICLE_CLASS)
 ):
@@ -333,7 +333,7 @@ for vehicle_class, i in product(
         vehicle_class,
         index_example=i,
         save=SAVE,
-        # pg_display=display,
+        pg_display=display,
     )
 
     run_car_front_no_brake(
@@ -346,9 +346,9 @@ for vehicle_class, i in product(
         index_example=i,
         vehicle_npc_idx=_vehicle_npc_idx,
         save=SAVE,
-        # pg_display=display,
+        pg_display=display,
     )
-"""
+#"""
 
 for i in range(N_EXAMPLES_PER_VEHICLE_CLASS):
     print(f"Running example {i} for pedestrian crossing")
@@ -360,7 +360,7 @@ for i in range(N_EXAMPLES_PER_VEHICLE_CLASS):
         N_EXTRA_NPC_VEHICLES_PEDESTRIAN_CROSS,
         index_example=i,
         save=SAVE,
-        #pg_display=display,
+        pg_display=display,
     )
 
     run_no_npc(
@@ -374,4 +374,4 @@ for i in range(N_EXAMPLES_PER_VEHICLE_CLASS):
         npc_class="pedestrians",
     )
 
-# pygame.quit()
+pygame.quit()

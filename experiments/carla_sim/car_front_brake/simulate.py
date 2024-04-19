@@ -5,12 +5,14 @@ from src.looming_sim.emd.simulator_EMD import run_EMD_sim
 
 from .settings import base_fold_input_data, base_fold_results
 
-run_sim = {"LGMD": run_LGMD_sim, "EMD": run_EMD_sim}
-
+#run_sim = {"LGMD": run_LGMD_sim, "EMD": run_EMD_sim}
+run_sim = {"EMD": run_EMD_sim}
 
 vehicle_classes = ["cars", "two_wheel", "trucks"]
 
 n_tiles = [2, 3, 4]
+
+MEASURE_SIM_SPEED = True
 
 for vehicle_class in vehicle_classes:
     vehicle_class_fold = os.path.join(base_fold_input_data, vehicle_class + "/")
@@ -42,6 +44,7 @@ for vehicle_class in vehicle_classes:
                     results_fold,
                     results_filename="results.npz",
                     custom_params={"N_SUBDIV_X": n_tile, "N_SUBDIV_Y": n_tile},
+                    measure_sim_speed=MEASURE_SIM_SPEED,
                 )
 
                 evt_file = os.path.join(
@@ -53,6 +56,7 @@ for vehicle_class in vehicle_classes:
                     results_fold,
                     results_filename="results_baseline.npz",
                     custom_params={"N_SUBDIV_X": n_tile, "N_SUBDIV_Y": n_tile},
+                    measure_sim_speed=MEASURE_SIM_SPEED,
                 )
 
         _sim = None

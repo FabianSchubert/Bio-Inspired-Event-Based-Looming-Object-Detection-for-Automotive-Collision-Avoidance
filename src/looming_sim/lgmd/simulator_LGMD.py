@@ -261,7 +261,9 @@ def run_LGMD_sim(
     p=params.copy(),
     results_filename="results.npz",
     custom_params={},
+    measure_sim_speed=False,
 ):
+    print("Running LGMD simulation")
     p["REC_SPIKES"] = ["P", "S", "LGMD"]
 
     evts = np.load(evt_file)
@@ -278,79 +280,83 @@ def run_LGMD_sim(
     network.load_input_data_from_file(evt_file)
     network.push_input_data_to_device()
 
-    rec_neurons = [("S", "V"), ("P", "V"), ("LGMD", "V")]
+    if not measure_sim_speed:
+        rec_neurons = [("S", "V"), ("P", "V"), ("LGMD", "V")]
+    else:
+        rec_neurons = []
     rec_dt = 10.0
 
     spike_t, spike_ID, rec_vars_n, rec_n_t, rec_vars_s, rec_s_t = network.run_model(
-        0.0, t_end, rec_neurons=rec_neurons, rec_timestep=rec_dt
+        0.0, t_end, rec_neurons=rec_neurons, rec_timestep=rec_dt, measure_sim_speed=measure_sim_speed
     )
 
-    v_s = []
-    v_out = []
-    sp_p = []
-    sp_s = []
-    sp_out = []
-    for i in range(network.n_tiles_y):
-        v_s.append([])
-        v_out.append([])
-        sp_p.append([])
-        sp_s.append([])
-        sp_out.append([])
-        for j in range(network.n_tiles_x):
-            v_s[-1].append(
-                np.reshape(
-                    rec_vars_n[f"VS_{i}_{j}"],
-                    (-1, network.S_height, network.S_width),
+    if not measure_sim_speed:
+        v_s = []
+        v_out = []
+        sp_p = []
+        sp_s = []
+        sp_out = []
+        for i in range(network.n_tiles_y):
+            v_s.append([])
+            v_out.append([])
+            sp_p.append([])
+            sp_s.append([])
+            sp_out.append([])
+            for j in range(network.n_tiles_x):
+                v_s[-1].append(
+                    np.reshape(
+                        rec_vars_n[f"VS_{i}_{j}"],
+                        (-1, network.S_height, network.S_width),
+                    )
                 )
-            )
-            v_out[-1].append(rec_vars_n[f"VLGMD_{i}_{j}"].flatten())
+                v_out[-1].append(rec_vars_n[f"VLGMD_{i}_{j}"].flatten())
 
-            sp_p[-1].append(
-                convert_spk_id_to_evt_array(
-                    spike_ID[f"P_{i}_{j}"],
-                    spike_t[f"P_{i}_{j}"],
-                    network.tile_width,
-                    network.tile_height,
+                sp_p[-1].append(
+                    convert_spk_id_to_evt_array(
+                        spike_ID[f"P_{i}_{j}"],
+                        spike_t[f"P_{i}_{j}"],
+                        network.tile_width,
+                        network.tile_height,
+                    )
                 )
-            )
-            sp_p[-1].append(
-                convert_spk_id_to_evt_array(
-                    spike_ID[f"S_{i}_{j}"],
-                    spike_t[f"S_{i}_{j}"],
-                    network.S_width,
-                    network.S_height,
+                sp_p[-1].append(
+                    convert_spk_id_to_evt_array(
+                        spike_ID[f"S_{i}_{j}"],
+                        spike_t[f"S_{i}_{j}"],
+                        network.S_width,
+                        network.S_height,
+                    )
                 )
-            )
-            sp_out[-1].append(
-                convert_spk_id_to_evt_array(
-                    spike_ID[f"LGMD_{i}_{j}"],
-                    spike_t[f"LGMD_{i}_{j}"],
-                    1,
-                    1,
+                sp_out[-1].append(
+                    convert_spk_id_to_evt_array(
+                        spike_ID[f"LGMD_{i}_{j}"],
+                        spike_t[f"LGMD_{i}_{j}"],
+                        1,
+                        1,
+                    )
                 )
-            )
 
-    if (network.n_tiles_x == 1) and (network.n_tiles_y == 1):
-        sp_p = np.array(sp_p, dtype=sp_p[0][0].dtype)
-        sp_s = np.array(sp_s, dtype=sp_s[0][0].dtype)
-        sp_out = np.array(sp_out, dtype=sp_out[0][0].dtype)
-    else:
-        sp_p = np.array(sp_p, dtype=object)
-        sp_s = np.array(sp_s, dtype=object)
-        sp_out = np.array(sp_out, dtype=object)
+        if (network.n_tiles_x == 1) and (network.n_tiles_y == 1):
+            sp_p = np.array(sp_p, dtype=sp_p[0][0].dtype)
+            sp_s = np.array(sp_s, dtype=sp_s[0][0].dtype)
+            sp_out = np.array(sp_out, dtype=sp_out[0][0].dtype)
+        else:
+            sp_p = np.array(sp_p, dtype=object)
+            sp_s = np.array(sp_s, dtype=object)
+            sp_out = np.array(sp_out, dtype=object)
 
-    if not os.path.exists(save_fold):
-        os.makedirs(save_fold)
+        if not os.path.exists(save_fold):
+            os.makedirs(save_fold)
 
-    np.savez(
-        os.path.join(save_fold, results_filename),
-        v_s=v_s,
-        v_out=v_out,
-        rec_n_t=rec_n_t,
-        sp_p=sp_p,
-        sp_s=sp_s,
-        sp_out=sp_out,
-    )
+        np.savez(
+            os.path.join(save_fold, results_filename),
+            v_s=v_s,
+            v_out=v_out,
+            rec_n_t=rec_n_t,
+            sp_p=sp_p,
+            sp_s=sp_s,
+            sp_out=sp_out,
+        )
 
     network.end()
 
