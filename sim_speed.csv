@@ -1,5 +1,13 @@
-gpu, model, fps
-rtx 2060, LGMD, 1139
-rtx 2060, LGMD, 1145
-rtx 2060, LGMD, 938
-rtx 2060, LGMD, 859
+gpu, model, Sim Steps / s
+RTX 2060 Mobile, LGMD, 1139
+RTX 2060 Mobile, LGMD, 1145
+RTX 2060 Mobile, LGMD, 938
+RTX 2060 Mobile, LGMD, 859
+RTX 2060 Mobile, EMD, 920
+RTX 2060 Mobile, EMD, 902
+RTX 2060 Mobile, EMD, 827
+Jetson Nano, EMD, 292
+Jetson Nano, EMD, 300
+Jetson Nano, LGMD, 403
+Jetson Nano, LGMD, 407
+
