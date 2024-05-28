@@ -13,7 +13,7 @@ from matplotlib import colormaps
 
 import seaborn as sns
 
-from sklearn.metrics import precision_recall_curve
+from sklearn.metrics import precision_recall_curve, average_precision_score, roc_auc_score
 
 from src.viz import gen_evt_hist
 
@@ -40,7 +40,7 @@ MAX_MIN_REACTION_TIME_MS = 2000.0
 
 MAX_REACTION_TIME_MS = 8000.0
 
-N_SUBDIV = 2
+N_SUBDIV = 4
 N_TILES_DISCARD_TOP = 1
 N_TILES_DISCARD_BOTTOM = 1
 
@@ -352,7 +352,15 @@ def calc_pr_curve(
         df_stats_response["correct response"], df_stats_response["score"]
     )
 
-    results = [pr, rc, th]
+    ap = average_precision_score(
+        df_stats_response["correct response"], df_stats_response["score"]
+    )
+
+    roc_auc = roc_auc_score(
+        df_stats_response["correct response"], df_stats_response["score"]
+    )
+
+    results = [pr, rc, th, ap, roc_auc]
 
     if return_accuracy:
         acc = []
@@ -385,13 +393,19 @@ max_acc = {
 
 fig, ax = plt.subplots(2, 3, figsize=(9, 5))
 
+ap_list_emd = []
+ap_list_lgmd = []
+
+roc_auc_emd = []
+roc_auc_lgmd = []
+
 for min_rt in np.linspace(MIN_MIN_REACTION_TIME_MS, MAX_MIN_REACTION_TIME_MS, n_sweep):
     col = colormaps["winter"](
         (min_rt - MIN_MIN_REACTION_TIME_MS)
         / (MAX_MIN_REACTION_TIME_MS - MIN_MIN_REACTION_TIME_MS)
     )
 
-    pr, rc, th, acc, f1 = calc_pr_curve(
+    pr, rc, th, ap, roc_auc, acc, f1 = calc_pr_curve(
         vhc,  # vehicle_classes,
         "EMD",
         N_SUBDIV,
@@ -402,6 +416,9 @@ for min_rt in np.linspace(MIN_MIN_REACTION_TIME_MS, MAX_MIN_REACTION_TIME_MS, n_
         n_tiles_discard_top=N_TILES_DISCARD_TOP,
         n_tiles_discard_bottom=N_TILES_DISCARD_BOTTOM,
     )
+
+    ap_list_emd.append(ap)
+    roc_auc_emd.append(roc_auc)
 
     idx_max_acc = np.argmax(acc)
     max_acc["EMD"][0].append(th[idx_max_acc])
@@ -431,7 +448,7 @@ for min_rt in np.linspace(MIN_MIN_REACTION_TIME_MS, MAX_MIN_REACTION_TIME_MS, n_
     ax[0, 2].set_xlabel("Threshold")
     # ax[0, 2].set_title("EMD")
 
-    pr, rc, th, acc, f1 = calc_pr_curve(
+    pr, rc, th, ap, roc_auc, acc, f1 = calc_pr_curve(
         vhc,
         "LGMD",
         N_SUBDIV,
@@ -442,6 +459,9 @@ for min_rt in np.linspace(MIN_MIN_REACTION_TIME_MS, MAX_MIN_REACTION_TIME_MS, n_
         n_tiles_discard_top=N_TILES_DISCARD_TOP,
         n_tiles_discard_bottom=N_TILES_DISCARD_BOTTOM,
     )
+
+    ap_list_lgmd.append(ap)
+    roc_auc_lgmd.append(roc_auc)
 
     idx_max_acc = np.argmax(acc)
     max_acc["LGMD"][0].append(th[idx_max_acc])
@@ -491,6 +511,52 @@ ax_max_acc.legend()
 ax_max_acc.set_ylim(-0.1, 1.1)
 
 fig_max_acc.tight_layout()
+
+fig_ap, ax_ap = plt.subplots(1, 1, figsize=(5, 4))
+
+ax_ap.plot(
+    np.linspace(MIN_MIN_REACTION_TIME_MS, MAX_MIN_REACTION_TIME_MS, n_sweep),
+    ap_list_emd,
+    "-",
+    label="EMD",
+)
+
+ax_ap.plot(
+    np.linspace(MIN_MIN_REACTION_TIME_MS, MAX_MIN_REACTION_TIME_MS, n_sweep),
+    ap_list_lgmd,
+    "-",
+    label="LGMD",
+)
+
+ax_ap.set_xlabel("Min reaction time before collision [ms]")
+ax_ap.set_ylabel("Average Precision")
+ax_ap.set_title("Average Precision")
+ax_ap.legend()
+
+fig_ap.tight_layout()
+
+fig_roc_auc, ax_roc_auc = plt.subplots(1, 1, figsize=(5, 4))
+
+ax_roc_auc.plot(
+    np.linspace(MIN_MIN_REACTION_TIME_MS, MAX_MIN_REACTION_TIME_MS, n_sweep),
+    roc_auc_emd,
+    "-",
+    label="EMD",
+)
+
+ax_roc_auc.plot(
+    np.linspace(MIN_MIN_REACTION_TIME_MS, MAX_MIN_REACTION_TIME_MS, n_sweep),
+    roc_auc_lgmd,
+    "-",
+    label="LGMD",
+)
+
+ax_roc_auc.set_xlabel("Min reaction time before collision [ms]")
+ax_roc_auc.set_ylabel("ROC AUC")
+ax_roc_auc.set_title("ROC AUC")
+ax_roc_auc.legend()
+
+fig_roc_auc.tight_layout()
 
 plt.show()
 

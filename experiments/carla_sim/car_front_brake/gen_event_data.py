@@ -24,16 +24,22 @@ base_fold = os.path.join(
     os.path.dirname(__file__), "../../../data/carla_sim/car_front_brake/"
 )
 
+base_fold_turn = os.path.join(
+    os.path.dirname(__file__), "../../../data/carla_sim/car_turn_front_brake/"
+)
+
 WIDTH, HEIGHT = 304, 240
 
 np.random.seed(time_ns() % 2**32)
 
-N_EXAMPLES_PER_VEHICLE_CLASS = 10
+N_EXAMPLES_PER_VEHICLE_CLASS = 1  # 10
 
-T_BRAKE = 10.0 # when the NPC vehicle starts braking
-T_CROSS = 3.5 # when the pedestrian starts crossing
+T_BRAKE = 10.0  # when the NPC vehicle starts braking
+T_CROSS = 3.5  # when the pedestrian starts crossing
 T_END = 15.0
-DT = 0.05 # 100 Hz
+DT = 0.05  # 100 Hz
+
+T_BRAKE_TURN = 6.0 # when the NPC vehicle starts braking in the turn
 
 TARGET_VEL_KMH = 15.0  # km/h
 MIN_DIST_LEADING_VEHICLE = 10.0  # meters
@@ -200,6 +206,167 @@ def run_car_front_brake(
     return vehicle_npc_idx
 
 
+def run_car_turn_no_brake(
+    t_end,
+    dt,
+    target_vel_kmh,
+    min_dist_leading_vehicle,
+    n_extra_npc_vehicles,
+    vehicle_class,
+    vehicle_npc_idx=None,
+    index_example=0,
+    save=True,
+    pg_display=None,
+    dim=(WIDTH, HEIGHT),
+    filename_extension="_baseline",
+):
+    client = carla.Client("localhost", 2000)
+    client.set_timeout(2.0)
+
+    world = client.get_world()
+
+    spawn_point_player = carla.Transform(world.get_map().get_spawn_points()[77].location + carla.Location(x=5.0), world.get_map().get_spawn_points()[77].rotation)
+    spawn_location_player = spawn_point_player.location
+    spawn_point_npc = world.get_map().get_spawn_points()[2]
+    spawn_location_npc = spawn_point_npc.location
+
+    target_location = world.get_map().get_spawn_points()[120].location
+
+    route_player = [spawn_location_player, spawn_location_npc, 0.5 * (spawn_location_npc + target_location), target_location]
+    route_npc = [spawn_location_npc, 0.5 * (spawn_location_npc + target_location), target_location]
+
+    directions = [
+        ("set_autopilot", ["vehicle_npc", True], {}, 0.0),
+        ("set_autopilot", ["vehicle_player", True], {}, 0.0),
+        ("set_path", ["vehicle_player", route_player], {}, 0.0),
+        ("set_path", ["vehicle_npc", route_npc], {}, 0.0),
+        ("set_desired_speed", ["vehicle_npc", target_vel_kmh], {}, 0.0),
+        ("set_desired_speed", ["vehicle_player", target_vel_kmh], {}, 0.0),
+        (
+            "distance_to_leading_vehicle",
+            ["vehicle_player", min_dist_leading_vehicle],
+            {},
+            0.0,
+        ),
+    ]
+
+    events, ct, vehicle_npc_idx = gen_event_data_npc_car(
+        directions,
+        t_end,
+        dt,
+        spawn_point_player,
+        spawn_point_npc,
+        n_extra_npc_vehicles,
+        vehicle_npc_idx=vehicle_npc_idx,
+        vehicle_npc_class=VEHICLE_CLASSES[vehicle_class],
+        pg_display=pg_display,
+        dim=dim,
+    )
+
+    if save:
+        save_fold = os.path.join(
+            base_fold_turn, vehicle_class, f"example_{index_example}"
+        )
+        if not os.path.exists(save_fold):
+            os.makedirs(save_fold)
+
+        np.save(os.path.join(save_fold, "events" + filename_extension + ".npy"), events)
+        np.savez(
+            os.path.join(save_fold, "sim_data" + filename_extension + ".npz"),
+            collision_time=ct,
+            t_end=t_end,
+            dt=dt,
+            target_vel_kmh=TARGET_VEL_KMH,
+        )
+
+    return vehicle_npc_idx
+
+def run_car_turn_brake(
+    t_end,
+    t_brake,
+    dt,
+    target_vel_kmh,
+    min_dist_leading_vehicle,
+    n_extra_npc_vehicles,
+    vehicle_class,
+    vehicle_npc_idx=None,
+    index_example=0,
+    save=True,
+    pg_display=None,
+    dim=(WIDTH, HEIGHT),
+    filename_extension="_baseline",
+):
+    client = carla.Client("localhost", 2000)
+    client.set_timeout(2.0)
+
+    world = client.get_world()
+
+    spawn_point_player = carla.Transform(world.get_map().get_spawn_points()[77].location + carla.Location(x=5.0), world.get_map().get_spawn_points()[77].rotation)
+    spawn_location_player = spawn_point_player.location
+    spawn_point_npc = world.get_map().get_spawn_points()[2]
+    spawn_location_npc = spawn_point_npc.location
+
+    target_location = world.get_map().get_spawn_points()[120].location
+
+    route_player = [spawn_location_player, spawn_location_npc, 0.5 * (spawn_location_npc + target_location), target_location]
+    route_npc = [spawn_location_npc, 0.5 * (spawn_location_npc + target_location), target_location]
+
+    directions = [
+        ("set_autopilot", ["vehicle_npc", True], {}, 0.0),
+        ("set_autopilot", ["vehicle_player", True], {}, 0.0),
+        ("set_path", ["vehicle_player", route_player], {}, 0.0),
+        ("set_path", ["vehicle_npc", route_npc], {}, 0.0),
+        ("set_desired_speed", ["vehicle_npc", target_vel_kmh], {}, 0.0),
+        ("set_desired_speed", ["vehicle_player", target_vel_kmh], {}, 0.0),
+        (
+            "distance_to_leading_vehicle",
+            ["vehicle_player", min_dist_leading_vehicle],
+            {},
+            0.0,
+        ),
+        ("set_autopilot", ["vehicle_npc", False], {}, t_brake),
+        ("ignore_vehicles_percentage", ["vehicle_player", 100], {}, t_brake),
+        (
+            "apply_control",
+            ["vehicle_npc", carla.VehicleControl(throttle=0.0, brake=2.0)],
+            {},
+            t_brake,
+        ),
+    ]
+
+    events, ct, vehicle_npc_idx = gen_event_data_npc_car(
+        directions,
+        t_end,
+        dt,
+        spawn_point_player,
+        spawn_point_npc,
+        n_extra_npc_vehicles,
+        vehicle_npc_idx=vehicle_npc_idx,
+        vehicle_npc_class=VEHICLE_CLASSES[vehicle_class],
+        pg_display=pg_display,
+        dim=dim,
+    )
+
+    if save:
+        save_fold = os.path.join(
+            base_fold_turn, vehicle_class, f"example_{index_example}"
+        )
+        if not os.path.exists(save_fold):
+            os.makedirs(save_fold)
+
+        np.save(os.path.join(save_fold, "events" + filename_extension + ".npy"), events)
+        np.savez(
+            os.path.join(save_fold, "sim_data" + filename_extension + ".npz"),
+            collision_time=ct,
+            t_end=t_end,
+            dt=dt,
+            target_vel_kmh=TARGET_VEL_KMH,
+        )
+
+    return vehicle_npc_idx
+
+
+
 def run_pedestrian_crossing(
     t_end,
     t_cross,
@@ -318,7 +485,7 @@ def run_no_npc(
 pygame.init()
 display = pygame.display.set_mode((WIDTH, HEIGHT))
 
-#"""
+"""
 for vehicle_class, i in product(
     VEHICLE_CLASSES.keys(), range(N_EXAMPLES_PER_VEHICLE_CLASS)
 ):
@@ -350,6 +517,7 @@ for vehicle_class, i in product(
     )
 #"""
 
+"""
 for i in range(N_EXAMPLES_PER_VEHICLE_CLASS):
     print(f"Running example {i} for pedestrian crossing")
     _npc_idx = run_pedestrian_crossing(
@@ -372,6 +540,37 @@ for i in range(N_EXAMPLES_PER_VEHICLE_CLASS):
         save=SAVE,
         #pg_display=display,
         npc_class="pedestrians",
+    )
+
+
+#"""
+
+for i in range(N_EXAMPLES_PER_VEHICLE_CLASS):
+    print(f"Running example {i} for car turning")
+    '''
+    _vehicle_npc_idx = run_car_turn_no_brake(
+        T_END,
+        DT,
+        TARGET_VEL_KMH,
+        0.0,#MIN_DIST_LEADING_VEHICLE,
+        N_EXTRA_NPC_VEHICLES_CAR_FRONT,
+        "cars",
+        index_example=i,
+        save=SAVE,
+        pg_display=display,
+    )'''
+
+    _vehicle_npc_idx = run_car_turn_brake(
+        T_END,
+        T_BRAKE_TURN,
+        DT,
+        TARGET_VEL_KMH,
+        0.0,#MIN_DIST_LEADING_VEHICLE,
+        N_EXTRA_NPC_VEHICLES_CAR_FRONT,
+        "two_wheel",
+        index_example=i,
+        save=SAVE,
+        pg_display=display,
     )
 
 pygame.quit()

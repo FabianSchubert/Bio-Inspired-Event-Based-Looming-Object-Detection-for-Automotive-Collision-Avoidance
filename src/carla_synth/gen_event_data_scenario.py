@@ -8,6 +8,7 @@ import carla
 
 import pygame
 
+from agents.navigation.basic_agent import BasicAgent
 
 from src.carla_synth.utils import CameraManager
 from src.config import EVENTS_DTYPE
@@ -72,6 +73,8 @@ def gen_event_data_npc_car(
     # transform_agent = world.get_map().get_spawn_points()[idx_tf]
 
     vehicle_player = world.spawn_actor(bp_player, spawn_point_player)
+
+    agent_player = BasicAgent(vehicle_player)
 
     actor_list.append(vehicle_player)
 
@@ -140,6 +143,7 @@ def gen_event_data_npc_car(
             obj_map[args[0]],
             args[1],  # args[1] is the distance in meters
         ),
+        "set_path": lambda args, kwargs: tm.set_path(obj_map[args[0]], args[1]),
     }
 
     tm.auto_lane_change(vehicle_player, False)  # disable auto lane change
@@ -173,7 +177,7 @@ def gen_event_data_npc_car(
         except Exception as e:
             print(f"Failed to spawn vehicle {i}")
 
-    world.get_spectator().set_transform(vehicle_player.get_transform())
+    #world.get_spectator().set_transform(vehicle_player.get_transform())
 
     #### main loop
     show_sim = False
