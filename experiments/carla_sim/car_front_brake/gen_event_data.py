@@ -32,25 +32,25 @@ WIDTH, HEIGHT = 304, 240
 
 np.random.seed(time_ns() % 2**32)
 
-N_EXAMPLES_PER_VEHICLE_CLASS = 1  # 10
+N_EXAMPLES_PER_VEHICLE_CLASS = 10
 
 T_BRAKE = 10.0  # when the NPC vehicle starts braking
 T_CROSS = 3.5  # when the pedestrian starts crossing
 T_END = 15.0
-DT = 0.05  # 100 Hz
+DT = 0.01  # 100 Hz
 
 T_BRAKE_TURN = 6.0 # when the NPC vehicle starts braking in the turn
 
 TARGET_VEL_KMH = 15.0  # km/h
 MIN_DIST_LEADING_VEHICLE = 10.0  # meters
 
-SAVE = False
+SAVE = True
 
-N_EXTRA_NPC_VEHICLES_CAR_FRONT = 20
+N_EXTRA_NPC_VEHICLES_CAR_FRONT = 0
 N_EXTRA_NPC_VEHICLES_PEDESTRIAN_CROSS = 0
 
 VEHICLE_CLASSES = {
-    "cars": "car",
+    #"cars": "car",
     "two_wheel": ["motorcycle", "bicycle"],
     "trucks": [
         "truck",
@@ -294,7 +294,7 @@ def run_car_turn_brake(
     save=True,
     pg_display=None,
     dim=(WIDTH, HEIGHT),
-    filename_extension="_baseline",
+    filename_extension="",
 ):
     client = carla.Client("localhost", 2000)
     client.set_timeout(2.0)
@@ -482,8 +482,10 @@ def run_no_npc(
         )
 
 
-pygame.init()
-display = pygame.display.set_mode((WIDTH, HEIGHT))
+#pygame.init()
+#display = pygame.display.set_mode((WIDTH, HEIGHT))
+
+display = None
 
 """
 for vehicle_class, i in product(
@@ -545,20 +547,10 @@ for i in range(N_EXAMPLES_PER_VEHICLE_CLASS):
 
 #"""
 
-for i in range(N_EXAMPLES_PER_VEHICLE_CLASS):
-    print(f"Running example {i} for car turning")
-    '''
-    _vehicle_npc_idx = run_car_turn_no_brake(
-        T_END,
-        DT,
-        TARGET_VEL_KMH,
-        0.0,#MIN_DIST_LEADING_VEHICLE,
-        N_EXTRA_NPC_VEHICLES_CAR_FRONT,
-        "cars",
-        index_example=i,
-        save=SAVE,
-        pg_display=display,
-    )'''
+for vehicle_class, i in product(
+    VEHICLE_CLASSES.keys(), range(N_EXAMPLES_PER_VEHICLE_CLASS)
+):
+    print(f"Running example {i} for car turning and braking, vehicle class {vehicle_class}")
 
     _vehicle_npc_idx = run_car_turn_brake(
         T_END,
@@ -567,10 +559,25 @@ for i in range(N_EXAMPLES_PER_VEHICLE_CLASS):
         TARGET_VEL_KMH,
         0.0,#MIN_DIST_LEADING_VEHICLE,
         N_EXTRA_NPC_VEHICLES_CAR_FRONT,
-        "two_wheel",
+        vehicle_class,
         index_example=i,
         save=SAVE,
         pg_display=display,
     )
 
-pygame.quit()
+    _vehicle_npc_idx = run_car_turn_no_brake(
+        T_END,
+        DT,
+        TARGET_VEL_KMH,
+        0.0,#MIN_DIST_LEADING_VEHICLE,
+        N_EXTRA_NPC_VEHICLES_CAR_FRONT,
+        vehicle_class,
+        index_example=i,
+        vehicle_npc_idx=_vehicle_npc_idx,
+        save=SAVE,
+        pg_display=display,
+    )
+
+    
+
+#pygame.quit()

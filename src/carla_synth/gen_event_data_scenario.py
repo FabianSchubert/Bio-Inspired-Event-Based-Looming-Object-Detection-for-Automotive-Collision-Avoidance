@@ -155,7 +155,7 @@ def gen_event_data_npc_car(
     tm.ignore_lights_percentage(vehicle_npc, 100)  # ignore traffic lights
     tm.ignore_signs_percentage(vehicle_npc, 100)  # ignore traffic signs
     tm.ignore_walkers_percentage(vehicle_npc, 100)  # ignore pedestrians
-    # tm.ignore_vehicles_percentage(vehicle_player, 100)  # ignore other vehicles
+    tm.ignore_vehicles_percentage(vehicle_npc, 100)  # ignore other vehicles
 
     spawn_points = world.get_map().get_spawn_points()
     n_spawn_points = len(spawn_points)
