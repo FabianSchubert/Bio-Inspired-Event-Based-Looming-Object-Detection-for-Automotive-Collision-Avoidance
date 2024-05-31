@@ -3,16 +3,19 @@ import os
 from src.looming_sim.lgmd.simulator_LGMD import run_LGMD_sim
 from src.looming_sim.emd.simulator_EMD import run_EMD_sim
 
-from .settings import base_fold_input_data, base_fold_results
+#from .settings import base_fold_input_data, base_fold_results, base_fold_input_data_turn, base_fold_results_turn
 
-#run_sim = {"LGMD": run_LGMD_sim, "EMD": run_EMD_sim}
-run_sim = {"EMD": run_EMD_sim}
+#from .settings import base_fold_input_data_front_brake as base_fold_input_data, base_fold_results_front_brake as base_fold_results
+from .settings import base_fold_input_data_turn_front_brake as base_fold_input_data, base_fold_results_turn_front_brake as base_fold_results
+
+run_sim = {"LGMD": run_LGMD_sim, "EMD": run_EMD_sim}
+#run_sim = {"EMD": run_EMD_sim}
 
 vehicle_classes = ["cars", "two_wheel", "trucks"]
 
 n_tiles = [2, 3, 4]
 
-MEASURE_SIM_SPEED = True
+MEASURE_SIM_SPEED = False
 
 for vehicle_class in vehicle_classes:
     vehicle_class_fold = os.path.join(base_fold_input_data, vehicle_class + "/")

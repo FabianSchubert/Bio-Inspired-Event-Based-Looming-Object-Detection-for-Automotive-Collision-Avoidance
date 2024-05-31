@@ -1,6 +1,12 @@
 import numpy as np
 
-from .settings import base_fold_results, base_fold_input_data
+# from .settings import base_fold_results, base_fold_input_data
+
+from .settings import (
+    base_fold_input_data_turn_front_brake as base_fold_input_data,
+    base_fold_results_turn_front_brake as base_fold_results,
+)
+
 
 from src.config import ROOT_DIR
 
@@ -13,7 +19,11 @@ from matplotlib import colormaps
 
 import seaborn as sns
 
-from sklearn.metrics import precision_recall_curve, average_precision_score, roc_auc_score
+from sklearn.metrics import (
+    precision_recall_curve,
+    average_precision_score,
+    roc_auc_score,
+)
 
 from src.viz import gen_evt_hist
 
@@ -29,11 +39,13 @@ plt.style.use(
     "https://raw.githubusercontent.com/FabianSchubert/mpl_style/main/custom_style.mplstyle"
 )
 
+BASE_FOLD_PLOTS = os.path.join(os.path.dirname(__file__), "results/")
+
 models = ["LGMD", "EMD"]
 
 vehicle_classes = ["cars", "two_wheel", "trucks"]
 
-n_tiles = [2, 3, 4]
+# n_tiles = [2, 3, 4]
 
 MIN_MIN_REACTION_TIME_MS = 500.0
 MAX_MIN_REACTION_TIME_MS = 2000.0
@@ -41,8 +53,14 @@ MAX_MIN_REACTION_TIME_MS = 2000.0
 MAX_REACTION_TIME_MS = 8000.0
 
 N_SUBDIV = 4
-N_TILES_DISCARD_TOP = 1
-N_TILES_DISCARD_BOTTOM = 1
+N_TILES_DISCARD_TOP = 2
+N_TILES_DISCARD_BOTTOM = 2
+
+
+FOLD_PLOTS = os.path.join(BASE_FOLD_PLOTS, f"{2*N_SUBDIV - 1}_tiles/")
+
+if not os.path.exists(FOLD_PLOTS):
+    os.makedirs(FOLD_PLOTS)
 
 WIDTH, HEIGHT = 304, 240
 
@@ -87,7 +105,7 @@ def calc_pr_curve_with_classifier(
             base_fold_results, vehicle_class, model, f"{n_tile}_tiles/"
         )
 
-        #n_examples = len(os.listdir(base_fold_results_vehicle))
+        # n_examples = len(os.listdir(base_fold_results_vehicle))
         n_examples = 3
 
         for i in range(n_examples):
@@ -162,7 +180,6 @@ def calc_pr_curve_with_classifier(
             if np.sum(v_out_bin) == 0:
                 predicted_labels.append(0)
             else:
-                
                 pos_resp_pos = np.where(v_out_bin)
                 idx_earliest = np.argmin(pos_resp_pos[2])
                 idx_y = pos_resp_pos[0][idx_earliest] + n_tiles_discard_top
@@ -200,7 +217,7 @@ def calc_pr_curve_with_classifier(
                 evt_data_filt["t"] -= int(t_ms - delta_t_ms)
 
                 if measure_class_time:
-                        t0 = time_ns()
+                    t0 = time_ns()
 
                 img_arr = gen_evt_hist(
                     evt_data_filt, 0.0, delta_t_ms, WIDTH // n_tile, HEIGHT // n_tile
@@ -211,16 +228,18 @@ def calc_pr_curve_with_classifier(
                     img_torch = (
                         torch.from_numpy(img_arr).unsqueeze(0).unsqueeze(0).to(device)
                     )
-                    
+
                     pred = int(np.argmax(rsn(img_torch.float()).cpu().numpy()[0]) != 2)
                 if measure_class_time:
                     t1 = time_ns()
                     timing_class = np.append(timing_class, t1 - t0)
 
                 predicted_labels.append(pred)
-        
+
         if measure_class_time:
-            print(f"Mean classification time: {np.mean(timing_class) * 1e-6} +- {np.std(timing_class) / np.sqrt(timing_class.shape[0]) * 1e-6} ms")
+            print(
+                f"Mean classification time: {np.mean(timing_class) * 1e-6} +- {np.std(timing_class) / np.sqrt(timing_class.shape[0]) * 1e-6} ms"
+            )
 
         tp = np.sum(
             np.logical_and(np.array(predicted_labels) == 1, np.array(true_label) == 1)
@@ -380,7 +399,7 @@ def calc_pr_curve(
     return results
 
 
-
+########################################################################
 
 vhc = vehicle_classes
 
@@ -487,6 +506,8 @@ for min_rt in np.linspace(MIN_MIN_REACTION_TIME_MS, MAX_MIN_REACTION_TIME_MS, n_
 
 fig.tight_layout()
 
+fig.savefig(os.path.join(FOLD_PLOTS, "pr_rec_acc.png"))
+
 fig_max_acc, ax_max_acc = plt.subplots(1, 1, figsize=(5, 4))
 
 ax_max_acc.plot(
@@ -512,6 +533,8 @@ ax_max_acc.set_ylim(-0.1, 1.1)
 
 fig_max_acc.tight_layout()
 
+fig_max_acc.savefig(os.path.join(FOLD_PLOTS, "max_acc.png"))
+
 fig_ap, ax_ap = plt.subplots(1, 1, figsize=(5, 4))
 
 ax_ap.plot(
@@ -534,6 +557,8 @@ ax_ap.set_title("Average Precision")
 ax_ap.legend()
 
 fig_ap.tight_layout()
+
+fig_ap.savefig(os.path.join(FOLD_PLOTS, "average_precision.png"))
 
 fig_roc_auc, ax_roc_auc = plt.subplots(1, 1, figsize=(5, 4))
 
@@ -558,6 +583,8 @@ ax_roc_auc.legend()
 
 fig_roc_auc.tight_layout()
 
+fig_roc_auc.savefig(os.path.join(FOLD_PLOTS, "roc_auc.png"))
+
 plt.show()
 
 
@@ -577,8 +604,6 @@ for min_rt in np.linspace(MIN_MIN_REACTION_TIME_MS, MAX_MIN_REACTION_TIME_MS, n_
         (min_rt - MIN_MIN_REACTION_TIME_MS)
         / (MAX_MIN_REACTION_TIME_MS - MIN_MIN_REACTION_TIME_MS)
     )
-
-
 
     pr, rc, th, acc, f1 = calc_pr_curve_with_classifier(
         vhc,  # vehicle_classes,
