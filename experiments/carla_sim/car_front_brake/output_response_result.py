@@ -1,6 +1,11 @@
 import numpy as np
 
-from .settings import base_fold_results, base_fold_input_data
+#from .settings import base_fold_results, base_fold_input_data
+
+from .settings import (
+    base_fold_input_data_turn_front_brake as base_fold_input_data,
+    base_fold_results_turn_front_brake as base_fold_results,
+)
 
 import os
 
@@ -14,6 +19,8 @@ import seaborn as sns
 plt.style.use(
     "https://raw.githubusercontent.com/FabianSchubert/mpl_style/main/custom_style.mplstyle"
 )
+
+plt.rcParams["figure.dpi"] = 150
 
 models = ["LGMD", "EMD"]
 
@@ -127,7 +134,7 @@ N_TILES_DISCARD_BOTTOM = 2
 
 T_MAX = 8000.0
 
-MODEL = "LGMD"
+MODEL = "EMD"
 VEHICLE_CLASSES = vehicle_classes
 
 ylim = {"LGMD": 20., "EMD": 0.75e-7}

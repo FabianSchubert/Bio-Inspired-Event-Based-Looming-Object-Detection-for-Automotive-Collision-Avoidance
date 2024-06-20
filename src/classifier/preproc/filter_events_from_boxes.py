@@ -6,7 +6,9 @@ import os
 from prophesee_toolbox.io.psee_loader import PSEELoader
 from src.utils import compare_boxes_patches, iou, crop_factor, group_boxes_by_ts
 
-from src.config import BOXES_DTYPE
+from src.classifier.utils.spike_to_tensor import gen_evt_tensor
+
+from src.config import BOXES_DTYPE, BOXES_YOLO_DTYPE
 
 from typing import Callable
 
@@ -132,6 +134,77 @@ def extract_negative_events(
     # see the return statement of extract_events_from_boxes for an
     # explanation of this weird thing about appending a None.
     return boxes_extract, np.array(events_list + [None], dtype=object)[:-1]
+
+
+def extract_whole_image_events_from_boxes(
+    evt_file: str,
+    box_file: str | None = None,
+    delta_t: float | int = 100000,  # microsecs!!!
+    convert_events_to_bin_tensor: bool = False,
+    delta_t_bin: float | int = 1000,  # microsecs!!!
+):
+    # infer the box_file from the event file if not provided
+    if not box_file:
+        box_file = evt_file.split("td.dat")[0] + "bbox.npy"
+
+    video = PSEELoader(evt_file)
+    boxes = np.load(box_file)
+
+    height, width = video.get_size()
+
+    delta_t = int(delta_t)
+
+    # only use boxes that start after delta_t
+    boxes = boxes[boxes["ts"] >= delta_t]
+
+    unique_ts = np.unique(boxes["ts"])
+
+    events_list = []
+    boxes_list = []
+
+    for ts in unique_ts:
+        video.seek_time(ts - delta_t)
+        events = video.load_delta_t(delta_t)
+
+        events["t"] -= int(ts) - delta_t
+
+        _boxes = boxes[boxes["ts"] == ts].copy()
+
+        
+
+        if convert_events_to_bin_tensor:
+            events = (
+                gen_evt_tensor(
+                    [events],
+                    width,
+                    height,
+                    t0_microsecs=0.0,
+                    t1_microsecs=delta_t,
+                    dt_microsecs=delta_t_bin,
+                )
+                .numpy()
+                .astype(np.int8)
+            )
+
+        events_list.append(events)
+
+        # I'd like to convert the given bounding boxes with the classes
+        # into the format used by YoLo.
+        # This means that we need to convert the bounding boxes into
+        # the format (x, y, width, height, class_label), where x and y
+        # are the center of the bounding box and width and height are
+        # the width and height of the bounding box.
+
+        _boxes_yolo = np.empty((len(_boxes), 5))
+        _boxes_yolo[:, 0] = _boxes["x"] + _boxes["w"] / 2
+        _boxes_yolo[:, 1] = _boxes["y"] + _boxes["h"] / 2
+        _boxes_yolo[:, 2] = _boxes["w"]
+        _boxes_yolo[:, 3] = _boxes["h"]
+        _boxes_yolo[:, 4] = _boxes["class_id"]
+
+        boxes_list.append(_boxes)
+
+    return boxes_list, events_list
 
 
 def extract_events_from_boxes(
@@ -277,9 +350,75 @@ def process_files(evt_files: list[str], output_path: str, task_number: int, **ar
         del _bx, _evt, _bx_neg, _evt_neg, _bx_comb, _evt_comb
 
 
+def process_files_full_image(
+    evt_files: list[str],
+    output_path: str,
+    task_number: int,
+    save_boxes_as_txt=False,
+    **args,
+):
+    for i, evt_fl in enumerate(evt_files):
+        print(
+            f"\x1b[2K\rprocessing file {i+1}/{len(evt_files)} in thread {task_number}",
+            end="\r",
+        )
+
+        _bx, _evt = extract_whole_image_events_from_boxes(evt_fl, **args)
+
+        file_base = os.path.basename(evt_fl.split("_td.dat")[0])
+
+        label_path = os.path.join(output_path, "labels")
+        events_path = os.path.join(output_path, "events")
+
+        if not os.path.exists(label_path):
+            os.makedirs(label_path)
+
+        if not os.path.exists(events_path):
+            os.makedirs(events_path)
+
+        for i, (bx, evt) in enumerate(zip(_bx, _evt)):
+            if save_boxes_as_txt:
+                _bx_txt = np.array(
+                    [
+                        (
+                            b["class_id"].astype(int),
+                            b["x"].astype("float"),
+                            b["y"].astype("float"),
+                            b["w"].astype("float"),
+                            b["h"].astype("float"),
+                        )
+                        for b in bx
+                    ],
+                )
+                np.savetxt(
+                    os.path.join(label_path, file_base + f"_{i}_bbox.txt"),
+                    _bx_txt,
+                    fmt="%d %f %f %f %f",
+                )
+            else:
+                np.save(
+                    os.path.join(label_path, file_base + f"_{i}_bbox.npy"),
+                    bx,
+                    allow_pickle=True,
+                )
+            np.save(
+                os.path.join(events_path, file_base + f"_{i}_td.npy"),
+                evt,
+                allow_pickle=True,
+            )
+
+        # (not sure if this helps to free memory)
+        del _bx, _evt
+
+
 def process_folder(
-    input_path: str, output_path: str, num_threads: int = 1, **args
+    input_path: str,
+    output_path: str,
+    num_threads: int = 1,
+    target_func: Callable = process_files,
+    **args,
 ) -> None:
+
     evt_files = glob(os.path.join(input_path, "*_td.dat"))
 
     evt_files_split = np.array_split(evt_files, num_threads)
@@ -287,7 +426,7 @@ def process_folder(
     threads = []
     for k in range(num_threads):
         _thread = threading.Thread(
-            target=process_files,
+            target=target_func,
             args=(list(evt_files_split[k]), output_path, k),
             kwargs=args,
         )

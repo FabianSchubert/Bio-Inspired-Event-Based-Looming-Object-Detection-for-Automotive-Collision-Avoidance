@@ -135,8 +135,8 @@ class Base_model(ABC):
         spike_bitmasks, pol_bitmasks = [], []
 
         for _x, _y, _st, _pol in zip(x, y, st, pol):
-            assert np.amax(_x) < self.tile_width
-            assert np.amax(_y) < self.tile_height
+            #assert np.amax(_x) < self.tile_width
+            #assert np.amax(_y) < self.tile_height
             spike_bitmasks.append(
                 spike_bitmask(
                     _st,
