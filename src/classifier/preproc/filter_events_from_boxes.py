@@ -170,7 +170,6 @@ def extract_whole_image_events_from_boxes(
 
         _boxes = boxes[boxes["ts"] == ts].copy()
 
-        
 
         if convert_events_to_bin_tensor:
             events = (
@@ -195,12 +194,8 @@ def extract_whole_image_events_from_boxes(
         # are the center of the bounding box and width and height are
         # the width and height of the bounding box.
 
-        _boxes_yolo = np.empty((len(_boxes), 5))
-        _boxes_yolo[:, 0] = _boxes["x"] + _boxes["w"] / 2
-        _boxes_yolo[:, 1] = _boxes["y"] + _boxes["h"] / 2
-        _boxes_yolo[:, 2] = _boxes["w"]
-        _boxes_yolo[:, 3] = _boxes["h"]
-        _boxes_yolo[:, 4] = _boxes["class_id"]
+        _boxes["x"] += _boxes["w"] / 2
+        _boxes["y"] += _boxes["h"] / 2
 
         boxes_list.append(_boxes)
 

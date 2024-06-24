@@ -23,7 +23,7 @@ NUM_THREADS = 5
 
 for i, fld in enumerate(FOLDERS):
     print(f"processing raw data from {fld}...")
-    '''
+    #'''
     process_folder(
         os.path.join(config.PATH_RAW_DATA, fld),
         os.path.join(config.PATH_PROCESSED_DATA, "event_slices_boxes", fld),
@@ -33,7 +33,7 @@ for i, fld in enumerate(FOLDERS):
         delta_t_bin=DELTA_T_BIN,
         convert_events_to_bin_tensor=BIN_TENSOR,
         save_boxes_as_txt=SAVE_BOXES_AS_TXT,
-    )'''
+    )#'''
 
     labels = os.listdir(os.path.join(config.PATH_PROCESSED_DATA, "event_slices_boxes", fld, "labels/"))
     # sort the labels
