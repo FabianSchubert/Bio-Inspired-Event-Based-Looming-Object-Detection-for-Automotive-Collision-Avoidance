@@ -3,7 +3,12 @@ import numpy as np
 kern_w = 9
 
 x, y = np.meshgrid(np.arange(kern_w)-kern_w//2, np.arange(kern_w)-kern_w//2)
-kernel_s_t = np.exp(-(x**2. + y**2.)/(2.*(kern_w/(5.))**2.))
+# kern_w is 3.5 sigma
+kernel_s_t = np.exp(-(x**2. + y**2.)/(2.*(kern_w/(3.5))**2.))
+
+kern_w_u = 10
+x, y = np.meshgrid(np.arange(kern_w_u)-kern_w_u//2, np.arange(kern_w_u)-kern_w_u//2)
+kernel_u = np.exp(-(x**2. + y**2.)/(2.*(kern_w_u/(3.5))**2.))
 
 params = {
     "NAME": "EMD_model",

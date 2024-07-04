@@ -12,6 +12,71 @@ p_neuron = genn_model.create_custom_neuron_class(
     is_auto_refractory_required=False,
 )
 
+grad_neuron = genn_model.create_custom_neuron_class(
+    "G",
+    param_names=["tau_m", "tau_in"],
+    var_name_types=[
+        ("dx", "scalar"),
+        ("dy", "scalar"),
+        ("dt", "scalar"),
+        ("vt", "scalar"),
+        ("dxdx", "scalar"),
+        ("dydy", "scalar"),
+        ("dxdy", "scalar"),
+        ("dxdt", "scalar"),
+        ("dydt", "scalar"),
+    ],
+    sim_code="""
+    $(dx) += DT * ($(Isyn_x) - $(dx)) / $(tau_in);
+    $(dy) += DT * ($(Isyn_y) - $(dy)) / $(tau_in);
+    $(dt) = ($(Isyn_t) - $(vt)) / $(tau_in);
+    $(vt) += DT * $(dt);
+
+    $(dxdx) = $(dx) * $(dx);
+    $(dydy) = $(dy) * $(dy);
+    $(dxdy) = $(dx) * $(dy);
+    $(dxdt) = $(dx) * $(dt);
+    $(dydt) = $(dy) * $(dt);
+    """,
+    additional_input_vars=[
+        ("Isyn_x", "scalar", 0.0),
+        ("Isyn_y", "scalar", 0.0),
+        ("Isyn_t", "scalar", 0.0),
+    ],
+    is_auto_refractory_required=False,
+)
+
+u_neuron = genn_model.create_custom_neuron_class(
+    "U",
+    param_names=["reg", "tau_m"],
+    var_name_types=[("ux", "scalar"), ("uy", "scalar"), ("V", "scalar")],
+    sim_code="""
+    const scalar a00 = $(Isyn_dxdx) + $(reg);
+    const scalar a01 = $(Isyn_dxdy);
+    const scalar a10 = $(Isyn_dxdy);
+    const scalar a11 = $(Isyn_dydy) + $(reg);
+
+    const scalar b0 = -$(Isyn_dxdt);
+    const scalar b1 = -$(Isyn_dydt);
+
+    const scalar det = a00 * a11 - a01 * a10;
+
+    $(ux) = (a11 * b0 - a01 * b1) / det;
+    $(uy) = (a00 * b1 - a10 * b0) / det;
+
+    const scalar u_proj = $(xnorm)[$(id)] * $(ux) + $(ynorm)[$(id)] * $(uy);
+    $(V) += DT * (u_proj - $(V)) / $(tau_m);
+    """,
+    additional_input_vars=[
+        ("Isyn_dxdx", "scalar", 0.0),
+        ("Isyn_dydy", "scalar", 0.0),
+        ("Isyn_dxdy", "scalar", 0.0),
+        ("Isyn_dxdt", "scalar", 0.0),
+        ("Isyn_dydt", "scalar", 0.0),
+    ],
+    is_auto_refractory_required=False,
+)
+
 s_neuron = genn_model.create_custom_neuron_class(
     "S",
     param_names=["tau_m", "tau_in", "v_norm"],
