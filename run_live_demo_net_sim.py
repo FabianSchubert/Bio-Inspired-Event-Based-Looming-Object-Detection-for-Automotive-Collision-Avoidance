@@ -9,11 +9,11 @@ from src.looming_sim.lgmd.network_settings import params as params_lgmd
 
 import numpy as np
 
-Simulator = LGMD_model
-params = params_lgmd
+#Simulator = LGMD_model
+#params = params_lgmd
 
-#Simulator = EMD_model
-#params = params_emd
+Simulator = EMD_model
+params = params_emd
 
 DT_GENN_MS = 1.0
 DT_CARLA = 0.01
@@ -84,10 +84,10 @@ while True:
 
     for i in range(N_TILES):
         for j in range(N_TILES):
-            simulator.LGMD[i * N_TILES + j].pull_var_from_device("V")
-            #simulator.OUT[i * N_TILES + j].pull_var_from_device("V")
-            voltages[i, j] = simulator.LGMD[i * N_TILES + j].vars["V"].view[0]
-            #voltages[i, j] = simulator.OUT[i * N_TILES + j].vars["V"].view[0]
+            #simulator.LGMD[i * N_TILES + j].pull_var_from_device("V")
+            simulator.OUT[i * N_TILES + j].pull_var_from_device("V")
+            #voltages[i, j] = simulator.LGMD[i * N_TILES + j].vars["V"].view[0]
+            voltages[i, j] = simulator.OUT[i * N_TILES + j].vars["V"].view[0]
 
     #print(voltages)
 
