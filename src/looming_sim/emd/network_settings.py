@@ -1,9 +1,12 @@
 import numpy as np
 
-kern_w = 9
+kern_w = 13
 
-x, y = np.meshgrid(np.arange(kern_w)-kern_w//2, np.arange(kern_w)-kern_w//2)
-kernel_s_t = np.exp(-(x**2. + y**2.)/(2.*(kern_w/(5.))**2.))
+sigm_kernel = 0.3
+
+x, y = np.meshgrid(np.linspace(-1.,1.,kern_w), np.linspace(-1.,1.,kern_w))
+kernel_p_s = np.exp(-(x**2.0 + y**2.0) / (2.0 * sigm_kernel**2.0))
+kernel_p_s /= np.sum(kernel_p_s)
 
 params = {
     "NAME": "EMD_model",
@@ -15,19 +18,29 @@ params = {
     "REC_SPIKES": ["P", "S", "OUT"],
     "INPUT_WIDTH": 304,
     "INPUT_HEIGHT": 240,
-    "N_SUBDIV_X": 2,
-    "N_SUBDIV_Y": 2,
+    "N_SUBDIV_X": 1,
+    "N_SUBDIV_Y": 1,
     "HALF_STEP_TILES": True,
     "SPK_REC_STEPS": 100,
     #
-    "P_S_T_KERNEL": kernel_s_t,
+    "TAU_MEM_P": 20.0,
+    "TAU_I_P": 5.0,
+    "V_THRESH_P": 0.5,
+    "T_REFRAC_P": 50.0,
     #
-    "TAU_MEM_S": 200.0,
-    "TAU_IN_S": 150.0,
-    "V_NORM_S": 1.0,
-    "POS_NORM_REG_S": 1e2,
+    "P_S_KERNEL": kernel_p_s,
     #
-    "G_FILT_BIAS_OUT": 0.,#1e-8,
-    "G_FILT_SCALE_OUT": 1e-10, # basically 0, which gives a heaviside function.
-    "OUTPUT_SCALE": 1.0,
+    "TAU_V_S": 50.0,
+    "TAU_PX_S": 1.0,
+    "V_REG_S": 1e-2,
+    #
+    "SIGM_POS_WEIGHTS_X": 0.25,
+    "SIGM_POS_WEIGHTS_Y": 0.25,
+    #
+    "OUTPUT_SCALE": 500.0,
+    "R_REG": 1e-2,
+    "TAU_MEM_OUT": 50.0,
+    "TAU_R_OUT": 20.0,
+    "FILT_SCALE_OUT": 0.05,
+    "FILT_BIAS_OUT": 0.1,
 }

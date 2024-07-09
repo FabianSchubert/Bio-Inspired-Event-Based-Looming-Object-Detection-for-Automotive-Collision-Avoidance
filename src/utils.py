@@ -5,6 +5,8 @@ from itertools import product
 
 from src.config import EVENTS_DTYPE
 
+from typing import Union
+
 class FixedDict(collections.abc.MutableMapping):
     def __init__(self, data):
         self.__data = data
@@ -38,7 +40,7 @@ def convert_spk_id_to_evt_array(
     spike_t: np.ndarray,
     width: int,
     height: int,
-    spike_pol: None | np.ndarray = None,
+    spike_pol: Union[None, np.ndarray] = None,
 ) -> np.ndarray:
     if spike_id.shape[0] > 0:
         assert (

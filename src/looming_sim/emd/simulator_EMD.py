@@ -4,12 +4,7 @@ import os
 
 from pygenn import genn_model
 from pygenn.genn_wrapper import NO_DELAY
-from .models_emd import (
-    p_neuron,
-    s_neuron,
-    out_neuron,
-    cont_wu,
-)
+from .models_emd import p_neuron, s_neuron, out_neuron, cont_wu, create_cont_wu
 
 from .network_settings import params
 
@@ -19,41 +14,35 @@ from ..simulator_base import Base_model
 
 from src.utils import convert_spk_id_to_evt_array
 
+cont_wu_xdxdt = create_cont_wu("cont_wu_xdxdt", "xdxdt")
+cont_wu_xdx_squ = create_cont_wu("const_wu_xdx_squ", "xdx_squ")
+
+
+def weights(x: np.ndarray, y: np.ndarray, sigma_x: float, sigma_y: float):
+    return np.exp(-(x**2) / (2 * sigma_x**2)) * np.exp(-(y**2) / (2 * sigma_y**2))
+
 
 class EMD_model(Base_model):
     def define_network(self, p):
         P_params = {}
-        self.P_inivars = {"V": 0.0}
+        #P_params = {
+        #    "tau_m": p["TAU_MEM_P"],
+        #    "tau_i": p["TAU_I_P"],
+        #    "th": p["V_THRESH_P"],
+        #}
+        _p_vars = [v.name for v in p_neuron.get_vars()]
+        self.P_inivars = dict(zip(_p_vars, [0.0] * len(_p_vars)))
 
         # input current sources (spike source array of DVS events)
         input_params = {"unit_amplitude": 1.0}
 
         self.input_inivars = {"nt": self.nt_max, "pop_size": self.n_input}
 
-        self.P_S_t_kernel = p["P_S_T_KERNEL"]
-        self.kernel_height, self.kernel_width = self.P_S_t_kernel.shape
+        self.P_S_i_kernel = p["P_S_KERNEL"]
+        self.kernel_height, self.kernel_width = self.P_S_i_kernel.shape
 
         assert self.kernel_height % 2 != 0, "kernel height must be uneven"
         assert self.kernel_width % 2 != 0, "kernel width must be uneven"
-
-        # just to make sure it's normalised
-        self.P_S_t_kernel /= self.P_S_t_kernel.sum()
-
-        self.P_S_t_inivars = {"g": self.P_S_t_kernel.flatten()}
-
-        # x derivative by shifting left and right.
-        self.P_S_x_kernel = np.zeros(self.P_S_t_kernel.shape)
-        self.P_S_x_kernel[:, 1:] += self.P_S_t_kernel[:, :-1] / 2.0
-        self.P_S_x_kernel[:, :-1] -= self.P_S_t_kernel[:, 1:] / 2.0
-
-        self.P_S_x_inivars = {"g": self.P_S_x_kernel.flatten()}
-
-        # same for y
-        self.P_S_y_kernel = np.zeros(self.P_S_t_kernel.shape)
-        self.P_S_y_kernel[1:, :] += self.P_S_t_kernel[:-1, :] / 2.0
-        self.P_S_y_kernel[:-1, :] -= self.P_S_t_kernel[1:, :] / 2.0
-
-        self.P_S_y_inivars = {"g": self.P_S_y_kernel.flatten()}
 
         self.kernel_half_width = (self.kernel_width - 1) // 2
         self.kernel_half_height = (self.kernel_height - 1) // 2
@@ -61,50 +50,86 @@ class EMD_model(Base_model):
         self.S_width = self.tile_width - 2 * self.kernel_half_width
         self.S_height = self.tile_height - 2 * self.kernel_half_height
 
+        self.delta_x = 2.0 / (self.S_width - 1)
+
+        # just to make sure it's normalised
+        self.P_S_i_kernel /= self.P_S_i_kernel.sum()
+
+        self.P_S_i_inivars = {"g": self.P_S_i_kernel.flatten()}
+
+        # x derivative by shifting left and right.
+        x_kernel, y_kernel = np.meshgrid(
+            (np.arange(self.kernel_width) - self.kernel_width // 2) * self.delta_x,
+            (np.arange(self.kernel_height) - self.kernel_height // 2) * self.delta_x,
+        )
+        self.P_S_x_kernel = self.P_S_i_kernel * x_kernel
+
+        self.P_S_x_inivars = {"g": self.P_S_x_kernel.flatten()}
+
+        # same for y
+        self.P_S_y_kernel = self.P_S_i_kernel * y_kernel
+
+        self.P_S_y_inivars = {"g": self.P_S_y_kernel.flatten()}
+
         self.n_S = self.S_width * self.S_height
 
-        self.S_OUT_left_weights = np.zeros((self.S_height, self.S_width, 1))
-        self.S_OUT_left_weights[:, : self.S_width // 2] = 1.0 / (
-            self.S_height * (self.S_width // 2)
+        xs, ys = np.meshgrid(
+            np.linspace(-1.0, 1.0, self.S_width),
+            np.linspace(
+                -self.S_height / self.S_width,
+                self.S_height / self.S_width,
+                self.S_height,
+            ),
         )
-        self.S_OUT_left_weights = np.reshape(self.S_OUT_left_weights, (self.n_S, 1))
+        pos_weights = weights(
+            xs,
+            ys,
+            p["SIGM_POS_WEIGHTS_X"],
+            p["SIGM_POS_WEIGHTS_Y"],
+        )
 
-        self.S_OUT_right_weights = np.zeros((self.S_height, self.S_width, 1))
-        self.S_OUT_right_weights[:, self.S_width // 2 :] = 1.0 / (
-            self.S_height * (self.S_width - self.S_width // 2)
-        )
-        self.S_OUT_right_weights = np.reshape(self.S_OUT_right_weights, (self.n_S, 1))
+        self.S_OUT_left_weights = np.zeros((self.S_height, self.S_width))
+        self.S_OUT_left_weights[:, : self.S_width // 2] = 1.0
+        self.S_OUT_left_weights *= pos_weights
+        self.S_OUT_left_weights /= np.sum(self.S_OUT_left_weights)
+
+        self.S_OUT_right_weights = np.zeros((self.S_height, self.S_width))
+        self.S_OUT_right_weights[:, self.S_width // 2 :] = 1.0
+        self.S_OUT_right_weights *= pos_weights
+        self.S_OUT_right_weights /= np.sum(self.S_OUT_right_weights)
+
+        self.S_OUT_left_inivars =  {"g": self.S_OUT_left_weights.flatten()}
+        self.S_OUT_right_inivars = {"g": self.S_OUT_right_weights.flatten()}
+
+        self.pos_norm_mean_left = ((xs**2.0 + ys**2.0) * pos_weights)[
+            :, : self.S_width // 2
+        ].mean()
+        self.pos_norm_mean_right = ((xs**2.0 + ys**2.0) * pos_weights)[
+            :, self.S_width // 2 :
+        ].mean()
 
         self.S_params = {
-            "tau_m": p["TAU_MEM_S"],
-            "tau_in": p["TAU_IN_S"],
-            "v_norm": p["V_NORM_S"],
+            "tau_v": p["TAU_V_S"],
+            "tau_px": p["TAU_PX_S"],
+            "v_reg": p["V_REG_S"],
         }
 
-        self.S_inivars = {
-            "dx": 0.0,
-            "dy": 0.0,
-            "dt": 0.0,
-            "vt": 0.0,
-            "vx": 0.0,
-            "vy": 0.0,
-            "V": 0.0,
-        }
-
-        xs, ys = np.meshgrid(
-            np.arange(self.S_width) - self.S_width // 2,
-            np.arange(self.S_height) - self.S_height // 2,
-        )
-        dnorm = np.sqrt(xs**2.0 + ys**2.0) + p["POS_NORM_REG_S"]
-        xsnorm = xs / (dnorm**2.0)
-        ysnorm = ys / (dnorm**2.0)
+        _s_vars = [v.name for v in s_neuron.get_vars()]
+        self.S_inivars = dict(zip(_s_vars, [0.0] * len(_s_vars)))
 
         self.OUT_params = {
-            "g_filt_bias": p["G_FILT_BIAS_OUT"],
-            "g_filt_scale": p["G_FILT_SCALE_OUT"],
             "output_scale": p["OUTPUT_SCALE"],
+            "r_reg": p["R_REG"],
+            "tau_m": p["TAU_MEM_OUT"],
+            "tau_r": p["TAU_R_OUT"],
+            "filt_scale": p["FILT_SCALE_OUT"],
+            "filt_bias": p["FILT_BIAS_OUT"],
+            "pos_norm_mean_left": self.pos_norm_mean_left,
+            "pos_norm_mean_right": self.pos_norm_mean_right,
         }
-        self.OUT_inivars = {"S_left": 0.0, "S_right": 0.0, "V": 0.0}
+
+        _out_vars = [v.name for v in out_neuron.get_vars()]
+        self.OUT_inivars = dict(zip(_out_vars, [0.0] * len(_out_vars)))
 
         """
         ---------------------------------------------------------------------------
@@ -134,9 +159,11 @@ class EMD_model(Base_model):
 
         self.P_S_x = []
         self.P_S_y = []
-        self.P_S_t = []
-        self.S_OUT_left = []
-        self.S_OUT_right = []
+        self.P_S_i = []
+        self.S_OUT_v_proj_left = []
+        self.S_OUT_v_proj_right = []
+        self.S_OUT_avg_act_left = []
+        self.S_OUT_avg_act_right = []
 
         for i in range(self.n_tiles_y):
             for j in range(self.n_tiles_x):
@@ -190,8 +217,8 @@ class EMD_model(Base_model):
                     )
                 )
 
-                self.S[-1].set_extra_global_param("xnorm", xsnorm.flatten())
-                self.S[-1].set_extra_global_param("ynorm", ysnorm.flatten())
+                self.S[-1].set_extra_global_param("x", xs.flatten())
+                self.S[-1].set_extra_global_param("y", ys.flatten())
 
                 self.OUT.append(
                     self.model.add_neuron_population(
@@ -241,16 +268,16 @@ class EMD_model(Base_model):
 
                 self.P_S_y[-1].ps_target_var = "Isyn_y"
 
-                self.P_S_t.append(
+                self.P_S_i.append(
                     self.model.add_synapse_population(
-                        f"P_S_t_{i}_{j}",
+                        f"P_S_i_{i}_{j}",
                         "TOEPLITZ_KERNELG",
                         NO_DELAY,
                         self.P[-1],
                         self.S[-1],
                         "StaticPulse",
                         {},
-                        self.P_S_t_inivars,
+                        self.P_S_i_inivars,
                         {},
                         {},
                         "DeltaCurr",
@@ -260,18 +287,18 @@ class EMD_model(Base_model):
                     )
                 )
 
-                self.P_S_t[-1].ps_target_var = "Isyn_t"
+                self.P_S_i[-1].ps_target_var = "Isyn_sp_in"
 
-                self.S_OUT_left.append(
+                self.S_OUT_v_proj_left.append(
                     self.model.add_synapse_population(
-                        f"S_OUT_left_{i}_{j}",
+                        f"S_OUT_v_proj_left_{i}_{j}",
                         "DENSE_INDIVIDUALG",
                         NO_DELAY,
                         self.S[-1],
                         self.OUT[-1],
-                        cont_wu,
+                        create_cont_wu("cont_wu_v_proj_left", "v_proj"),
                         {},
-                        {"g": self.S_OUT_left_weights.flatten()},
+                        self.S_OUT_left_inivars,
                         {},
                         {},
                         "DeltaCurr",
@@ -280,18 +307,18 @@ class EMD_model(Base_model):
                     )
                 )
 
-                self.S_OUT_left[-1].ps_target_var = "Isyn_left"
+                self.S_OUT_v_proj_left[-1].ps_target_var = "Isyn_v_proj_left"
 
-                self.S_OUT_right.append(
+                self.S_OUT_v_proj_right.append(
                     self.model.add_synapse_population(
-                        f"S_OUT_right_{i}_{j}",
+                        f"S_OUT_v_proj_right_{i}_{j}",
                         "DENSE_INDIVIDUALG",
                         NO_DELAY,
                         self.S[-1],
                         self.OUT[-1],
-                        cont_wu,
+                        create_cont_wu("cont_wu_v_proj_right", "v_proj"),
                         {},
-                        {"g": self.S_OUT_right_weights.flatten()},
+                        self.S_OUT_right_inivars,
                         {},
                         {},
                         "DeltaCurr",
@@ -300,7 +327,47 @@ class EMD_model(Base_model):
                     )
                 )
 
-                self.S_OUT_right[-1].ps_target_var = "Isyn_right"
+                self.S_OUT_v_proj_right[-1].ps_target_var = "Isyn_v_proj_right"
+
+                self.S_OUT_avg_act_left.append(
+                    self.model.add_synapse_population(
+                        f"S_OUT_avg_act_left_{i}_{j}",
+                        "DENSE_INDIVIDUALG",
+                        NO_DELAY,
+                        self.S[-1],
+                        self.OUT[-1],
+                        create_cont_wu("cont_wu_avg_act_left", "act_filt"),
+                        {},
+                        self.S_OUT_left_inivars,
+                        {},
+                        {},
+                        "DeltaCurr",
+                        {},
+                        {},
+                    ),
+                )
+
+                self.S_OUT_avg_act_left[-1].ps_target_var = "Isyn_avg_act_left"
+
+                self.S_OUT_avg_act_right.append(
+                    self.model.add_synapse_population(
+                        f"S_OUT_avg_act_right_{i}_{j}",
+                        "DENSE_INDIVIDUALG",
+                        NO_DELAY,
+                        self.S[-1],
+                        self.OUT[-1],
+                        create_cont_wu("cont_wu_avg_act_right", "act_filt"),
+                        {},
+                        self.S_OUT_right_inivars,
+                        {},
+                        {},
+                        "DeltaCurr",
+                        {},
+                        {},
+                    ),
+                )
+
+                self.S_OUT_avg_act_right[-1].ps_target_var = "Isyn_avg_act_right"
 
 
 def run_EMD_sim(
@@ -336,7 +403,11 @@ def run_EMD_sim(
     rec_dt = 10.0
 
     spike_t, spike_ID, rec_vars_n, rec_n_t, rec_vars_s, rec_s_t = network.run_model(
-        0.0, t_end, rec_neurons=rec_neurons, rec_timestep=rec_dt, measure_sim_speed=measure_sim_speed
+        0.0,
+        t_end,
+        rec_neurons=rec_neurons,
+        rec_timestep=rec_dt,
+        measure_sim_speed=measure_sim_speed,
     )
     if not measure_sim_speed:
         v_s = []

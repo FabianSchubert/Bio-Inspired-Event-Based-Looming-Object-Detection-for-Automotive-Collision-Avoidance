@@ -171,11 +171,11 @@ WIDTH, HEIGHT = 304, 240
 TILE_WIDTH = WIDTH // N_SUBDIV
 TILE_HEIGHT = HEIGHT // N_SUBDIV
 
-#OUTPUT_SCALE = 1e-7
-OUTPUT_SCALE = 200.0
+OUTPUT_SCALE = 1.0
+#OUTPUT_SCALE = 200.0
 
-#THRESHOLD = 5e-8
-THRESHOLD = 100.0
+THRESHOLD = 1.0
+#THRESHOLD = 100.0
 
 DT = 0.01
 
@@ -1533,12 +1533,20 @@ class CameraManager(object):
                     ]
                 ),
             )
-            self.sensor_data = dvs_events
+            self.sensor_data = dvs_events.copy()
             self.dvs_img = np.zeros((image.height, image.width, 3), dtype=np.uint8)
             # Blue is positive, red is negative
-            self.dvs_img[
-                dvs_events[:]["y"], dvs_events[:]["x"], dvs_events[:]["p"] * 2
-            ] = 255
+            hist = np.histogram2d(dvs_events[:]["x"], dvs_events[:]["y"], bins=(np.arange(0, image.width + 1), np.arange(0, image.height + 1)), weights=dvs_events[:]["p"])[0]
+            hist = np.clip(hist, -15, 15)
+            hist = (hist + 15) / 30 * 255
+
+            self.dvs_img[:,:,0] = hist.T
+            self.dvs_img[:,:,1] = hist.T
+            self.dvs_img[:,:,2] = hist.T
+
+            #self.dvs_img[
+            #    dvs_events[:]["y"], dvs_events[:]["x"], dvs_events[:]["p"] * 1
+            #] = 255
             self.surface = pygame.surfarray.make_surface(self.dvs_img.swapaxes(0, 1))
         elif self.sensors[self.index][0].startswith("sensor.camera.optical_flow"):
             image = image.get_color_coded_flow()
@@ -1634,19 +1642,39 @@ def game_loop(args):
                 return
             world.tick(clock)
             world.render(display)
-            connection.send(world.camera_manager.sensor_data)
-            sim_data = connection.recv()
+            _sens_data = world.camera_manager.sensor_data.copy()
+
+            if isinstance(_sens_data, str) and _sens_data == "close":
+                break
+            # set times to start at 0
+            _sens_data["t"] -= _sens_data["t"].min()
+            # NANOSECONDS to milliseconds
+            _sens_data["t"] = _sens_data["t"] // 1000000
+
+            _sens_data = _sens_data[_sens_data["t"] < 1000 * DT]
+
+            x = _sens_data["x"].astype("<u2")
+            y = _sens_data["y"].astype("<u2")
+            t = _sens_data["t"].astype("<u4")
+            pol = _sens_data["p"].astype("<u2")
+            #pol[:] = 1
+
+            #_sens_data = np.array(list(zip(t, x, y, pol)), dtype=[("t", "<u4"), ("x", "<u2"), ("y", "<u2"), ("p", "<u2")])
+
+            #connection.send(world.camera_manager.sensor_data)
+            #connection.send(_sens_data)
+            #sim_data = connection.recv()
             # print("sim_msg: ", sim_msg)
 
             # draw transparent rectangles for the tiles based on sim_data
 
-            for i in range(1, N_TILES - 1):
+            for i in range(N_TILES):
                 for j in range(N_TILES):
                     x0 = int(j * TILE_WIDTH / 2.0)
                     # x1 = x0 + TILE_WIDTH
                     y0 = int(i * TILE_HEIGHT / 2.0)
                     # y1 = y0 + TILE_HEIGHT
-                    #'''
+                    '''
                     draw_surf.fill((0, 0, 0, 0))
                     pygame.draw.rect(
                         draw_surf,
@@ -1661,6 +1689,7 @@ def game_loop(args):
                     )
                     display.blit(draw_surf, (0, 0))
                     #'''
+                    '''
                     draw_surf.fill((0, 0, 0, 0))
                     pygame.draw.rect(
                         draw_surf,
@@ -1691,7 +1720,7 @@ def game_loop(args):
                         text_surface = my_font.render(["Car", "Pedestrian"][pred], False, (0, 0, 255))
                         text_w, text_h = text_surface.get_rect().width, text_surface.get_rect().height
                         display.blit(text_surface, (x0 + TILE_WIDTH/2 - text_w/2, y0 + TILE_HEIGHT/2 - text_h/2))
-
+            '''
             pygame.display.flip()
 
     finally:

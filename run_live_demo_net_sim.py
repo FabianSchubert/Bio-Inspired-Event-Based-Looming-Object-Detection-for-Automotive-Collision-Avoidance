@@ -9,11 +9,13 @@ from src.looming_sim.lgmd.network_settings import params as params_lgmd
 
 import numpy as np
 
-Simulator = LGMD_model
-params = params_lgmd
+from mpl_multiproc import NBPlot
 
-#Simulator = EMD_model
-#params = params_emd
+#Simulator = LGMD_model
+#params = params_lgmd
+
+Simulator = EMD_model
+params = params_emd
 
 DT_GENN_MS = 1.0
 DT_CARLA = 0.01
@@ -24,14 +26,20 @@ HALF_STRIDE = True
 WIDTH, HEIGHT = 304, 240
 
 p = params.copy()
-p["NT_MAX"] = int(DT_CARLA * 1000 / DT_GENN_MS) * 2
+N_SIM_STEPS = int(DT_CARLA * 1000 / DT_GENN_MS)
+p["NT_MAX"] = N_SIM_STEPS * 2
 p["HALF_STEP_TILES"] = HALF_STRIDE
 p["N_SUBDIV_X"] = N_SUBDIV
 p["N_SUBDIV_Y"] = N_SUBDIV
 p["DT_MS"] = DT_GENN_MS
 N_TILES = (N_SUBDIV * 2 - 1) if HALF_STRIDE else N_SUBDIV
 
+multiplot = NBPlot(mode="line", n_lines=3)
+
+
 simulator = Simulator(p)
+
+plot_img = NBPlot(mode="image", shape=(simulator.S_height, simulator.S_width), vmin=-1e-5, vmax=1e-5)
 
 voltages = np.zeros((N_TILES, N_TILES))
 
@@ -45,7 +53,8 @@ print('connection accepted from', listener.last_accepted)
 while True:
 
 
-    evts = conn.recv()
+    #evts = conn.recv()
+    '''
     if isinstance(evts, str) and evts == "close":
         break
     # set times to start at 0
@@ -62,7 +71,7 @@ while True:
     pol[:] = 1
 
     evts = np.array(list(zip(t, x, y, pol)), dtype=[("t", "<u4"), ("x", "<u2"), ("y", "<u2"), ("p", "<u2")])
-
+    
     tld_evts = tiled_events(evts, WIDTH, HEIGHT, N_SUBDIV, N_SUBDIV, HALF_STRIDE)
     x = [tl_data[-1]["x"] for tl_data in tld_evts]
     y = [tl_data[-1]["y"] for tl_data in tld_evts]
@@ -78,19 +87,35 @@ while True:
 
     # push the data to the device
     simulator.push_input_data_to_device()
-
-    for i in range(p["NT_MAX"]):
-        simulator.model.step_time()
+    '''
+    #for i in range(N_SIM_STEPS):
+    #    simulator.model.step_time()
 
     for i in range(N_TILES):
         for j in range(N_TILES):
-            simulator.LGMD[i * N_TILES + j].pull_var_from_device("V")
-            #simulator.OUT[i * N_TILES + j].pull_var_from_device("V")
-            voltages[i, j] = simulator.LGMD[i * N_TILES + j].vars["V"].view[0]
-            #voltages[i, j] = simulator.OUT[i * N_TILES + j].vars["V"].view[0]
+            '''
+            #simulator.LGMD[i * N_TILES + j].pull_var_from_device("V")
+            simulator.OUT[i * N_TILES + j].pull_var_from_device("V")
+            #voltages[i, j] = simulator.LGMD[i * N_TILES + j].vars["V"].view[0]
+            voltages[i, j] = simulator.OUT[i * N_TILES + j].vars["V"].view[0]
+
+            if i==1 and j==1:
+                
+                simulator.OUT[i * N_TILES + j].pull_var_from_device("r_left")
+                r_left = simulator.OUT[i * N_TILES + j].vars["r_left"].view[0]
+                simulator.OUT[i * N_TILES + j].pull_var_from_device("r_right")
+                r_right = simulator.OUT[i * N_TILES + j].vars["r_right"].view[0]
+
+                simulator.S[i * N_TILES + j].pull_var_from_device("vx")
+                vx = np.reshape(simulator.S[i * N_TILES + j].vars["vx"].view[:], (simulator.S_height, simulator.S_width))
+
+                multiplot.plot(np.array([voltages[i, j], r_left, r_right]))
+                plot_img.plot(vx)
+            '''
+            pass            
 
     #print(voltages)
 
-    conn.send(voltages)
+    #conn.send(voltages)
 
 listener.close()
