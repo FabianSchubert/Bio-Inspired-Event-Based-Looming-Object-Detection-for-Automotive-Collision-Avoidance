@@ -20,6 +20,94 @@ import datetime
 
 from src.config import EVENTS_DTYPE
 
+def calc_projected_box_extent(inv_cam_matrix, box_world_vertices):
+    x0, y0, x1, y1 = np.inf, np.inf, -np.inf, -np.inf
+    rot_mat = np.array(inv_cam_matrix)[:3, :3]
+    for vertex in box_world_vertices:
+        vertex = np.array([vertex.x, vertex.y, vertex.z])
+        # rotate vertex into camera frame
+        vertex = np.dot(rot_mat, vertex)
+        # transform from UE4 to "standard" right-handed coordinates:
+        # in the camera space of ue4:
+        # forward is x, right is y, up is z
+        # in the "normal" camera space:
+        # right is x, down is y, forward is z
+        vertex = np.array([vertex[1], -vertex[2], vertex[0]])
+        # update the outer bounds
+        x0 = min(x0, vertex[0])
+        y0 = min(y0, vertex[1])
+        x1 = max(x1, vertex[0])
+        y1 = max(y1, vertex[1])
+    
+    return (x1 - x0), (y1 - y0)
+
+def draw_image(surface, image, blend=False, scale=None):
+    if isinstance(image, carla.libcarla.Image):
+        array = np.frombuffer(image.raw_data, dtype=np.dtype("uint8"))
+        array = np.reshape(array, (image.height, image.width, 4))
+        array = array[:, :, :3]
+        array = array[:, :, ::-1]
+    else:
+        array = image.copy()
+    scale = (image.width, image.height) if scale is None else scale
+    image_surface = pygame.surfarray.make_surface(array.swapaxes(0, 1))
+    image_surface = pygame.transform.scale(image_surface, scale)
+    if blend:
+        image_surface.set_alpha(100)
+    surface.blit(image_surface, (0, 0))
+
+def pol_evt_img_to_rgb(evt_img):
+    rgb_img = np.zeros((evt_img.shape[0], evt_img.shape[1], 3), dtype=np.uint8)
+    rgb_img[:, :, 0] = (evt_img == -1) * 255
+    rgb_img[:, :, 1] = (evt_img == 1) * 255
+
+    return rgb_img
+
+def convert_events(events):
+    evt_arr = np.frombuffer(
+        events.raw_data,
+        dtype=np.dtype(
+            [
+                ("x", np.uint16),
+                ("y", np.uint16),
+                ("t", np.int64),
+                ("p", bool),
+            ]
+        ),
+    ).copy()
+    # evt_arr['p'] = evt_arr['p'].astype(int) * 2 - 1
+    return evt_arr
+
+
+def downsample_events(events_array, width, height, clip=1):
+    idx_x = events_array["x"].astype(int)
+    idx_y = events_array["y"].astype(int)
+    idx_flat = idx_y * width + idx_x
+    sum_pol_events = np.bincount(
+            idx_flat,
+            weights=events_array["p"].astype(int) * 2 - 1,
+            minlength=width * height,
+        )
+    sum_events = np.bincount(
+            idx_flat,
+            minlength=width * height,
+        )
+    mean = sum_pol_events / (sum_events + 1e-2)
+
+    return np.clip(np.round(mean), -clip, clip)
+
+    sum_events = np.clip(
+        np.bincount(
+            idx_flat,
+            weights=events_array["p"].astype(int) * 2 - 1,
+            minlength=width * height,
+        ),
+        -clip,
+        clip,
+    )
+
+    return sum_events  # .reshape((HEIGHT, WIDTH))
+
 
 def get_actor_display_name(actor, truncate=250):
     name = " ".join(actor.type_id.replace("_", ".").title().split(".")[1:])
