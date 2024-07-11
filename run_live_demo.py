@@ -18,6 +18,8 @@ from src.looming_sim.format_spike_data import tiled_events
 from src.looming_sim.emd.network_settings import params as params_emd
 from src.looming_sim.lgmd.network_settings import params as params_lgmd
 
+from src.carla_synth.utils import draw_image, convert_events, downsample_events
+
 
 def should_quit(events):
     for event in events:
@@ -29,48 +31,7 @@ def should_quit(events):
     return False
 
 
-def draw_image(surface, image, blend=False):
-    array = np.frombuffer(image.raw_data, dtype=np.dtype("uint8"))
-    array = np.reshape(array, (image.height, image.width, 4))
-    array = array[:, :, :3]
-    array = array[:, :, ::-1]
-    image_surface = pygame.surfarray.make_surface(array.swapaxes(0, 1))
-    if blend:
-        image_surface.set_alpha(100)
-    surface.blit(image_surface, (0, 0))
 
-
-def convert_events(events):
-    evt_arr = np.frombuffer(
-        events.raw_data,
-        dtype=np.dtype(
-            [
-                ("x", np.uint16),
-                ("y", np.uint16),
-                ("t", np.int64),
-                ("p", bool),
-            ]
-        ),
-    ).copy()
-    # evt_arr['p'] = evt_arr['p'].astype(int) * 2 - 1
-    return evt_arr
-
-
-def downsample_events(events_array, clip=1):
-    idx_x = events_array["x"].astype(int)
-    idx_y = events_array["y"].astype(int)
-    idx_flat = idx_y * WIDTH + idx_x
-    sum_events = np.clip(
-        np.bincount(
-            idx_flat,
-            weights=events_array["p"].astype(int) * 2 - 1,
-            minlength=WIDTH * HEIGHT,
-        ),
-        -clip,
-        clip,
-    )
-
-    return sum_events  # .reshape((HEIGHT, WIDTH))
 
 
 def exit_sim():
@@ -137,8 +98,8 @@ POS_CAM = carla.Location(x=2.5, y=0.0, z=1.0)
 ROT_CAM = carla.Rotation(pitch=0.0, yaw=0.0, roll=0.0)
 
 DVS_REFR_TIME_NS = 0.001e9
-DVS_THRESHOLD = 0.3
-DVS_LOG_EPS = 5e-1
+DVS_THRESHOLD = 0.2
+DVS_LOG_EPS = 1e-1
 ##############################
 
 ## simulator settings ##
@@ -264,7 +225,7 @@ def sim_loop():
         if not event_queue.empty():
             events_carla = event_queue.get()
             events = convert_events(events_carla)
-            events_binned = downsample_events(events, 1)
+            events_binned = downsample_events(events, WIDTH, HEIGHT, clip=1)
 
             pl.plot(events_binned.reshape((HEIGHT, WIDTH)))
 
@@ -323,10 +284,12 @@ def sim_loop():
         clock.tick(FPS)
     
     exit_sim()
-
+'''
 with Profile() as profile:
     sim_loop()
     print(Stats(profile)
           .strip_dirs()
           .sort_stats(SortKey.TIME)
           .print_stats())
+'''
+sim_loop()

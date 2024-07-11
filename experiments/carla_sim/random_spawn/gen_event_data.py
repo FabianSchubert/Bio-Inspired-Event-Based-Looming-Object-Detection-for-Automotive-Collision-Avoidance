@@ -99,11 +99,11 @@ DVS_LOG_EPS = 1e-1
 SPAWN_DIST_CAR = 15.0
 SPAWN_DIST_PED = 15.0
 
-R_RANDOM_OFFSET_MAX_CAR = 0.5
+R_RANDOM_OFFSET_MAX_CAR = 0.0
 R_RANDOM_OFFSET_MAX_PED = 0.0
 
 T_WAIT = 3.0
-
+Placeholder name
 T_MAX_SHOW = 4.0
 T_CUTOFF_START = 0.5
 ##############################
@@ -201,12 +201,8 @@ traffic_manager.ignore_walkers_percentage(vehicle, 100)
 traffic_manager.distance_to_leading_vehicle(vehicle, 0.0)
 # traffic_manager.vehicle_percentage_speed_difference(vehicle, 75)
 
-index_example = {
-    "cars": 22,
-    "cars_baseline": 20,
-    "pedestrians": 17,
-    "pedestrians_baseline": 21,
-}
+files_in_fold = os.listdir(base_fold)
+index_example = len(files_in_fold)
 
 while True:
     timer.step()
@@ -256,7 +252,7 @@ while True:
         vehicle_velocities = []
         average_diameter_obstacle = []
 
-        spawn_type = np.random.choice(["cars", "pedestrians", "None"])
+        spawn_type = np.random.choice(["cars", "pedestrians", "none"])
         # spawn_type = np.random.choice(["Pedestrian"])
         # spawn_type = np.random.choice(["None"])
 
@@ -331,12 +327,12 @@ while True:
 
         # vehicle.apply_control(_vehicle_control)
 
-    if timer.record and (spawn_type != "None") and agent is None:
+    if timer.record and (spawn_type != 'none') and agent is None:
         agent = world.try_spawn_actor(agent_bp, agent_transf)
 
     if (
         timer.record
-        and (spawn_type != "None")
+        and (spawn_type != "none")
         and (agent is not None)
         and (not ground_fixed)
     ):
@@ -369,7 +365,7 @@ while True:
 
         if agent is not None:
             inv_cm_mat = camera_event.get_transform().get_inverse_matrix()
-            agent_box_verts = agent.bounding_box.get_world_vertices()
+            agent_box_verts = agent.bounding_box.get_world_vertices(agent.get_transform())
 
             box_dims = calc_projected_box_extent(inv_cm_mat, agent_box_verts)
             # append geometric mean of the box dimensions
@@ -392,39 +388,33 @@ while True:
 
         if timer.coll_event is not None:
             coll_type = spawn_type
-            filename_extension = ""
-
-            # get the average diameter of the colliding object
-            # projected onto the direction of motion.
+            avg_dim = np.mean(average_diameter_obstacle)
 
         else:
-            coll_type = random.choice(["cars", "pedestrians"])
-            filename_extension = "_baseline"
+            coll_type = "none"
+            avg_dim = None
 
-        # average velocity over the trial in m/s
         avg_vel = np.mean(vehicle_velocities)
-        avg_dim = np.mean(average_diameter_obstacle)
 
         save_fold = os.path.join(
             base_fold,
-            coll_type,
-            f"example_{index_example[coll_type + filename_extension]}",
+            f"example_{index_example}",
         )
         if not os.path.exists(save_fold):
             os.makedirs(save_fold)
 
-        np.save(os.path.join(save_fold, "events" + filename_extension + ".npy"), events)
+        np.save(os.path.join(save_fold, "events.npy"), event_rec)
         np.savez(
-            os.path.join(save_fold, "sim_data" + filename_extension + ".npz"),
+            os.path.join(save_fold, "sim_data.npz"),
+            coll_type=coll_type,
             collision_time=t_end,
             t_end=t_end,
             dt=DT * 1000,
             vel=avg_vel,
+            diameter_object=avg_dim,
         )
 
-        np.savez(os.path.join(save_fold, "sim_data" + filename_extension + ".npz"))
-
-        index_example[coll_type + filename_extension] += 1
+        index_example += 1
 
         del event_rec
         del event_rec_x

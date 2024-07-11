@@ -25,11 +25,11 @@ def weights(x: np.ndarray, y: np.ndarray, sigma_x: float, sigma_y: float):
 class EMD_model(Base_model):
     def define_network(self, p):
         P_params = {}
-        #P_params = {
+        # P_params = {
         #    "tau_m": p["TAU_MEM_P"],
         #    "tau_i": p["TAU_I_P"],
         #    "th": p["V_THRESH_P"],
-        #}
+        # }
         _p_vars = [v.name for v in p_neuron.get_vars()]
         self.P_inivars = dict(zip(_p_vars, [0.0] * len(_p_vars)))
 
@@ -98,7 +98,7 @@ class EMD_model(Base_model):
         self.S_OUT_right_weights *= pos_weights
         self.S_OUT_right_weights /= np.sum(self.S_OUT_right_weights)
 
-        self.S_OUT_left_inivars =  {"g": self.S_OUT_left_weights.flatten()}
+        self.S_OUT_left_inivars = {"g": self.S_OUT_left_weights.flatten()}
         self.S_OUT_right_inivars = {"g": self.S_OUT_right_weights.flatten()}
 
         self.pos_norm_mean_left = ((xs**2.0 + ys**2.0) * pos_weights)[
@@ -378,6 +378,7 @@ def run_EMD_sim(
     results_filename="results.npz",
     custom_params={},
     measure_sim_speed=False,
+    rec_neurons=[("OUT", "V"), ("OUT", "r_left"), ("OUT", "r_right")],
 ):
     print("Running EMD simulation")
     p["REC_SPIKES"] = ["P", "S", "OUT"]
@@ -396,10 +397,9 @@ def run_EMD_sim(
     network.load_input_data_from_file(evt_file)
     network.push_input_data_to_device()
 
-    if not measure_sim_speed:
-        rec_neurons = [("S", "V"), ("P", "V"), ("OUT", "V")]
-    else:
+    if measure_sim_speed:
         rec_neurons = []
+
     rec_dt = 10.0
 
     spike_t, spike_ID, rec_vars_n, rec_n_t, rec_vars_s, rec_s_t = network.run_model(
@@ -410,25 +410,31 @@ def run_EMD_sim(
         measure_sim_speed=measure_sim_speed,
     )
     if not measure_sim_speed:
-        v_s = []
+        #v_s = []
         v_out = []
+        r_left_out = []
+        r_right_out = []
         sp_p = []
         sp_s = []
         sp_out = []
         for i in range(network.n_tiles_y):
-            v_s.append([])
+            #v_s.append([])
             v_out.append([])
+            r_left_out.append([])
+            r_right_out.append([])
             sp_p.append([])
             sp_s.append([])
             sp_out.append([])
             for j in range(network.n_tiles_x):
-                v_s[-1].append(
-                    np.reshape(
-                        rec_vars_n[f"VS_{i}_{j}"],
-                        (-1, network.S_height, network.S_width),
-                    )
-                )
+                #v_s[-1].append(
+                #    np.reshape(
+                #        rec_vars_n[f"VS_{i}_{j}"],
+                #        (-1, network.S_height, network.S_width),
+                #    )
+                #)
                 v_out[-1].append(rec_vars_n[f"VOUT_{i}_{j}"].flatten())
+                r_left_out[-1].append(rec_vars_n[f"r_leftOUT_{i}_{j}"].flatten())
+                r_right_out[-1].append(rec_vars_n[f"r_rightOUT_{i}_{j}"].flatten())
 
                 sp_p[-1].append(
                     convert_spk_id_to_evt_array(
@@ -469,8 +475,10 @@ def run_EMD_sim(
 
         np.savez(
             os.path.join(save_fold, results_filename),
-            v_s=v_s,
+            #v_s=v_s,
             v_out=v_out,
+            r_left_out=r_left_out,
+            r_right_out=r_right_out,
             rec_n_t=rec_n_t,
             sp_p=sp_p,
             sp_s=sp_s,

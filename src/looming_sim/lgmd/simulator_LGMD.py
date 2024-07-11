@@ -262,6 +262,7 @@ def run_LGMD_sim(
     results_filename="results.npz",
     custom_params={},
     measure_sim_speed=False,
+    rec_neurons=[("LGMD", "V")]
 ):
     print("Running LGMD simulation")
     p["REC_SPIKES"] = ["P", "S", "LGMD"]
@@ -280,9 +281,7 @@ def run_LGMD_sim(
     network.load_input_data_from_file(evt_file)
     network.push_input_data_to_device()
 
-    if not measure_sim_speed:
-        rec_neurons = [("S", "V"), ("P", "V"), ("LGMD", "V")]
-    else:
+    if measure_sim_speed:
         rec_neurons = []
     rec_dt = 10.0
 
@@ -291,24 +290,24 @@ def run_LGMD_sim(
     )
 
     if not measure_sim_speed:
-        v_s = []
+        #v_s = []
         v_out = []
         sp_p = []
         sp_s = []
         sp_out = []
         for i in range(network.n_tiles_y):
-            v_s.append([])
+            #v_s.append([])
             v_out.append([])
             sp_p.append([])
             sp_s.append([])
             sp_out.append([])
             for j in range(network.n_tiles_x):
-                v_s[-1].append(
-                    np.reshape(
-                        rec_vars_n[f"VS_{i}_{j}"],
-                        (-1, network.S_height, network.S_width),
-                    )
-                )
+                #v_s[-1].append(
+                #    np.reshape(
+                #        rec_vars_n[f"VS_{i}_{j}"],
+                #        (-1, network.S_height, network.S_width),
+                #    )
+                #)
                 v_out[-1].append(rec_vars_n[f"VLGMD_{i}_{j}"].flatten())
 
                 sp_p[-1].append(
@@ -350,7 +349,7 @@ def run_LGMD_sim(
 
         np.savez(
             os.path.join(save_fold, results_filename),
-            v_s=v_s,
+            #v_s=v_s,
             v_out=v_out,
             rec_n_t=rec_n_t,
             sp_p=sp_p,
