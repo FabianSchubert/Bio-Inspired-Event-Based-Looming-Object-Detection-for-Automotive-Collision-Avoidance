@@ -96,18 +96,6 @@ def downsample_events(events_array, width, height, clip=1):
 
     return np.clip(np.round(mean), -clip, clip)
 
-    sum_events = np.clip(
-        np.bincount(
-            idx_flat,
-            weights=events_array["p"].astype(int) * 2 - 1,
-            minlength=width * height,
-        ),
-        -clip,
-        clip,
-    )
-
-    return sum_events  # .reshape((HEIGHT, WIDTH))
-
 
 def get_actor_display_name(actor, truncate=250):
     name = " ".join(actor.type_id.replace("_", ".").title().split(".")[1:])

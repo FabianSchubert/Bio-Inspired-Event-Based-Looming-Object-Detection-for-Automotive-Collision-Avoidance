@@ -31,13 +31,13 @@ params = {
     "TAU_SYN_IN_S_I": 150.0,
     "TAU_SYN_IN_S_E": 150.0,
     "W_IN_S_E": 0.25,
-    # S to LGMD settings
-    "W_S_LGMD": 1.0,
-    # P to LGMD settings
-    "W_IN_LGMD": -0.003,
-    "TAU_IN_LGMD": 250.0,
-    "THRESH_IN_LGMD": 300.0,
-    "SYN_DELAY_IN_LGMD": int(0),
+    # S to OUT settings
+    "W_S_OUT": 1.0,
+    # P to OUT settings
+    "W_IN_OUT": -0.06,
+    "TAU_IN_OUT": 250.0,
+    "THRESH_IN_OUT": 30.0,
+    "SYN_DELAY_IN_OUT": int(0),
     # P settings
     "TAU_MEM_P": 50.0,
     "TAU_I_P": 20.0,
@@ -49,11 +49,11 @@ params = {
     "TAU_MEM_S": 50.0,
     "V_THRESH_S": 0.25,
     "V_RESET_S": 0.0,
-    # LGMD settings
-    "TAU_MEM_LGMD": 150.0,
-    "V_THRESH_LGMD": 100000.0,
-    "V_RESET_LGMD": 0.0,
-    "SCALE_I_IN_LGMD": 500.,
+    # OUT settings
+    "TAU_MEM_OUT": 150.0,
+    "V_THRESH_OUT": 100000.0,
+    "V_RESET_OUT": 0.0,
+    "SCALE_I_IN_OUT": 500.,
     # simulation settings
     "DT_MS": 1.0,
     "T_START_MS": 0.0,
@@ -62,6 +62,6 @@ params = {
     "N_BATCH": 1,
     "CUDA_VISIBLE_DEVICES": False,
     # recording settings
-    "REC_SPIKES": ["P", "S", "LGMD"],
+    "REC_SPIKES": ["P", "S", "OUT"],
     "REC_SYNAPSES": [],  # ("in_S_I","in_syn")],
 }

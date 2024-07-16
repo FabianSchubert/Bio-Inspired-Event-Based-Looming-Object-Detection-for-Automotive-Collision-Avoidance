@@ -2,12 +2,14 @@ from pygenn import genn_model
 import numpy as np
 
 lgmd_neuron = genn_model.create_custom_neuron_class(
-    "LGMD",
+    "OUT",
     param_names=["tau_m", "V_thresh", "V_reset", "scale_i_in"],
-    var_name_types=[("V", "scalar"), ("VI", "scalar")],
+    var_name_types=[("V", "scalar"), ("VE", "scalar"), ("VI", "scalar")],
     sim_code="""
-    $(VI) = $(Isyn) * exp($(Isyn_i)/$(scale_i_in));
-    $(V) += ($(VI)-$(V))/$(tau_m)*DT;  // linear Euler
+    $(VE) = $(Isyn);
+    $(VI) = $(Isyn_i);
+
+    $(V) += ($(VE) + $(VI)-$(V))/$(tau_m)*DT;  // linear Euler
     """,
     threshold_condition_code="""
     $(V) >= $(V_thresh)

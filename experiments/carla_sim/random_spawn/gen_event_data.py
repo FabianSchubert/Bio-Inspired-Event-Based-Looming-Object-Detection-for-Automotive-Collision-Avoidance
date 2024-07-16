@@ -7,6 +7,27 @@ import numpy as np
 import pygame
 import os
 
+
+def calc_steering_angle(target_location, vehicle, prop_gain=0.1):
+    # calculate the steering angle
+    vehicle_transform = vehicle.get_transform()
+    target_vector = np.array(
+        [
+            target_location.x - vehicle_transform.location.x,
+            target_location.y - vehicle_transform.location.y,
+        ]
+    )
+    target_vector = target_vector / np.linalg.norm(target_vector)
+    right_vector = vehicle_transform.get_right_vector()
+    right_vector = np.array([right_vector.x, right_vector.y])
+    right_vector = right_vector / np.linalg.norm(right_vector)
+
+    # calculate the angle between the vectors
+    dot = np.dot(target_vector, right_vector)
+
+    return prop_gain * math.asin(dot) * 180 / math.pi
+
+
 from src.carla_synth.utils import (
     convert_events,
     downsample_events,
@@ -15,8 +36,6 @@ from src.carla_synth.utils import (
     calc_projected_box_extent,
 )
 from src.config import EVENTS_DTYPE
-
-from PIL import Image
 
 
 def on_collision(event, timer):
@@ -70,14 +89,17 @@ class CollTiming:
         self.record = True
 
     def end(self, coll_event=None):
-        self.t1 = self.t
-        self.record = False
-        self.await_finish = True
         if coll_event is not None:
+            if not (coll_event.other_actor.type_id.startswith(("vehicle", "walker"))):
+                print("Collision with non-agent detected, skipping")
+                return
             print(coll_event.actor, coll_event.other_actor)
             self.coll_event = coll_event
         else:
             self.coll_event = coll_event
+        self.t1 = self.t
+        self.record = False
+        self.await_finish = True
 
 
 ###### SIM SETTINGS ########################
@@ -100,10 +122,9 @@ SPAWN_DIST_CAR = 15.0
 SPAWN_DIST_PED = 15.0
 
 R_RANDOM_OFFSET_MAX_CAR = 0.0
-R_RANDOM_OFFSET_MAX_PED = 0.0
+R_RANDOM_OFFSET_MAX_PED = 1.0
 
 T_WAIT = 3.0
-Placeholder name
 T_MAX_SHOW = 4.0
 T_CUTOFF_START = 0.5
 ##############################
@@ -146,6 +167,9 @@ vehicle = world.spawn_actor(
     blueprint_library.find("vehicle.audi.a2"),
     start_pos,
 )
+
+POS_CAM.x = vehicle.bounding_box.extent.x + 0.05
+
 
 actor_list.append(vehicle)
 
@@ -252,6 +276,8 @@ while True:
         vehicle_velocities = []
         average_diameter_obstacle = []
 
+        # spawn_type = "pedestrians"
+        # spawn_type = "cars"
         spawn_type = np.random.choice(["cars", "pedestrians", "none"])
         # spawn_type = np.random.choice(["Pedestrian"])
         # spawn_type = np.random.choice(["None"])
@@ -274,6 +300,22 @@ while True:
 
         vehicle_transf = vehicle.get_transform()
         fwd_vec = vehicle_transf.get_forward_vector()
+        right_vec = vehicle_transf.get_right_vector()
+
+        steer_angle = vehicle.get_wheel_steer_angle(
+            carla.VehicleWheelLocation.Front_Wheel
+        )
+
+        turn_rad = (
+            vehicle.get_velocity().length()
+            * 180.0
+            / (np.pi * vehicle.get_angular_velocity().z)
+        )
+        phi = (SPAWN_DIST_CAR if (spawn_type == "cars") else SPAWN_DIST_PED) / turn_rad
+
+        targ_pos_rel = (
+            fwd_vec * np.sin(phi) * turn_rad + right_vec * (1 - np.cos(phi)) * turn_rad
+        )
 
         random_offset_r = np.sqrt(np.random.rand()) * (
             R_RANDOM_OFFSET_MAX_CAR
@@ -290,7 +332,7 @@ while True:
 
         agent_transf = carla.Transform(
             vehicle_transf.location
-            + (SPAWN_DIST_CAR if (spawn_type == "cars") else SPAWN_DIST_PED) * fwd_vec
+            + targ_pos_rel
             + carla.Location(z=5.0)
             + random_offset,
             vehicle_transf.rotation,
@@ -301,15 +343,9 @@ while True:
 
         # vehicle.set_autopilot(False)
 
-        path_target = (
-            vehicle_transf.location
-            + (SPAWN_DIST_CAR if (spawn_type == "cars") else SPAWN_DIST_PED) * fwd_vec
-            + random_offset
-        )
+        path_target = vehicle_transf.location + targ_pos_rel + random_offset
 
         path_target.z = vehicle_transf.location.z
-
-        traffic_manager.set_path(vehicle, [path_target, path_target, path_target])
 
         # traffic_manager.ignore_lights_percentage(vehicle, 100)
         # traffic_manager.ignore_signs_percentage(vehicle, 100)
@@ -327,7 +363,7 @@ while True:
 
         # vehicle.apply_control(_vehicle_control)
 
-    if timer.record and (spawn_type != 'none') and agent is None:
+    if timer.record and (spawn_type != "none") and agent is None:
         agent = world.try_spawn_actor(agent_bp, agent_transf)
 
     if (
@@ -342,12 +378,39 @@ while True:
                 agent.bounding_box.extent.z - agent.bounding_box.location.z + 0.05
             )
             agent.set_location(agent_loc)
+            if spawn_type == "cars":
+                agent.set_autopilot(True)
+            else:
+                # make the walker walk
+                agent.apply_control(carla.WalkerControl(speed=1.0))
 
             print("Ground fixed")
 
             ground_fixed = True
 
+            vehicle.set_autopilot(False)
+            const_speed = vehicle.get_velocity().length()
+
+
     if timer.record:
+        if (spawn_type != "none") and ground_fixed:
+
+            vehicle_control = carla.VehicleAckermannControl()
+
+            #vehicle_control = vehicle.get_control()
+            vehicle_control.steer = calc_steering_angle(
+                agent.get_transform().location, vehicle
+            )
+            #vehicle_control.throttle = 0.5
+            #vehicle_control.brake = 0.0
+            #vehicle_control.hand_brake = False
+            vehicle_control.speed = const_speed
+            vehicle.apply_ackermann_control(vehicle_control)
+
+            # traffic_manager.set_path(vehicle, [vehicle.get_location(), agent.get_location()])
+
+        # print(traffic_manager.get_all_actions(vehicle))
+
         evts_idx = np.where(events_binned != 0)[0]
         if len(evts_idx) == 0:
             continue
@@ -365,7 +428,9 @@ while True:
 
         if agent is not None:
             inv_cm_mat = camera_event.get_transform().get_inverse_matrix()
-            agent_box_verts = agent.bounding_box.get_world_vertices(agent.get_transform())
+            agent_box_verts = agent.bounding_box.get_world_vertices(
+                agent.get_transform()
+            )
 
             box_dims = calc_projected_box_extent(inv_cm_mat, agent_box_verts)
             # append geometric mean of the box dimensions
@@ -376,45 +441,65 @@ while True:
             list(zip(event_rec_t, event_rec_x, event_rec_y, event_rec_p)),
             dtype=EVENTS_DTYPE,
         )
-        event_rec = event_rec[event_rec["t"] > (T_CUTOFF_START + timer.t0) * 1000]
 
-        event_rec["t"] -= int(timer.t0 * 1000)
+        # filter out events before t0
+        event_rec = event_rec[event_rec["t"] > ((timer.t0 + T_CUTOFF_START) * 1000)]
 
-        t_end = int((timer.t1 - timer.t0) * 1000)
+        # shift the earliest remaining event to t=0
+        event_rec["t"] -= int((timer.t0 + T_CUTOFF_START) * 1000)
+
+        # shift the end time accordingly.
+        t_end = int((timer.t1 - timer.t0 - T_CUTOFF_START) * 1000)
 
         print("Recording finished")
 
         timer.await_finish = False
 
-        if timer.coll_event is not None:
+        _save = True
+
+        if (timer.coll_event is None) and (spawn_type != "none"):
+            _save = False
+            if agent is not None:
+                print(
+                    f"{spawn_type} spawned, but no collision detected for {spawn_type}, skipping example."
+                )
+            else:
+                print(f"Spawning of {spawn_type} failed, skipping example.")
+        elif (timer.coll_event is not None) and (spawn_type == "none"):
+            print("No object spawned, but collision detected, skipping example.")
+            _save = False
+        elif (timer.coll_event is None) and (spawn_type == "none"):
+            print("Baseline example recording finished, saving example.")
+            coll_type = "none"
+            avg_dim = None
+        else:
+            print(f"Collision with {spawn_type} detected, saving example.")
             coll_type = spawn_type
             avg_dim = np.mean(average_diameter_obstacle)
 
-        else:
-            coll_type = "none"
-            avg_dim = None
+        if _save:
+            avg_vel = np.mean(vehicle_velocities)
 
-        avg_vel = np.mean(vehicle_velocities)
+            save_fold = os.path.join(
+                base_fold,
+                f"example_{index_example}",
+            )
+            if not os.path.exists(save_fold):
+                os.makedirs(save_fold)
 
-        save_fold = os.path.join(
-            base_fold,
-            f"example_{index_example}",
-        )
-        if not os.path.exists(save_fold):
-            os.makedirs(save_fold)
+            np.save(os.path.join(save_fold, "events.npy"), event_rec)
+            np.savez(
+                os.path.join(save_fold, "sim_data.npz"),
+                coll_type=coll_type,
+                t_end=t_end,
+                dt=DT * 1000,
+                vel=avg_vel,
+                diameter_object=avg_dim,
+            )
 
-        np.save(os.path.join(save_fold, "events.npy"), event_rec)
-        np.savez(
-            os.path.join(save_fold, "sim_data.npz"),
-            coll_type=coll_type,
-            collision_time=t_end,
-            t_end=t_end,
-            dt=DT * 1000,
-            vel=avg_vel,
-            diameter_object=avg_dim,
-        )
+            index_example += 1
 
-        index_example += 1
+        vehicle.set_autopilot(True)
 
         del event_rec
         del event_rec_x

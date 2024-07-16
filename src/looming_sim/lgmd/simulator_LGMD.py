@@ -31,7 +31,9 @@ class LGMD_model(Base_model):
             "V_thresh": p["V_THRESH_P"],
             "V_reset": p["V_RESET_P"],
         }
-        self.P_inivars = {"V": 0.0, "VI": 0.0}
+
+        _p_vars = [v.name for v in p_neuron.get_vars()]
+        self.P_inivars = dict(zip(_p_vars, [0.0] * len(_p_vars)))
 
         # input current sources (spike source array of DVS events)
         input_params = {"unit_amplitude": p["INPUT_EVENT_CURRENT"]}
@@ -49,16 +51,20 @@ class LGMD_model(Base_model):
             "V_thresh": p["V_THRESH_S"],
             "V_reset": p["V_RESET_S"],
         }
-        self.S_inivars = {"V": 0.0, "VI": 0.0}
 
-        # LGMD neuron
-        LGMD_params = {
-            "tau_m": p["TAU_MEM_LGMD"],
-            "V_thresh": p["V_THRESH_LGMD"],
-            "V_reset": p["V_RESET_LGMD"],
-            "scale_i_in": p["SCALE_I_IN_LGMD"],
+        _s_vars = [v.name for v in lif_neuron.get_vars()]
+        self.S_inivars = dict(zip(_s_vars, [0.0] * len(_s_vars)))
+
+        # OUT neuron
+        OUT_params = {
+            "tau_m": p["TAU_MEM_OUT"],
+            "V_thresh": p["V_THRESH_OUT"],
+            "V_reset": p["V_RESET_OUT"],
+            "scale_i_in": p["SCALE_I_IN_OUT"],
         }
-        self.LGMD_inivars = {"V": 0.0, "VI": 0.0}
+
+        _out_vars = [v.name for v in lgmd_neuron.get_vars()]
+        self.OUT_inivars = dict(zip(_out_vars, [0.0] * len(_out_vars)))
 
         """
         ---------------------------------------------------------------------------
@@ -95,21 +101,21 @@ class LGMD_model(Base_model):
             "Conv2D", self.I_kernel_params
         )
 
-        # input to LGMD inhibition (subsuming F neuron)
-        in_LGMD_params = {
-            "tau": p["TAU_IN_LGMD"],
-            "threshold": p["THRESH_IN_LGMD"],
+        # input to OUT inhibition (subsuming F neuron)
+        in_OUT_params = {
+            "tau": p["TAU_IN_OUT"],
+            "threshold": p["THRESH_IN_OUT"],
         }
 
         self.P = []
         self.input = []
         self.S = []
-        self.LGMD = []
+        self.OUT = []
 
         self.in_S_E = []
         self.in_S_I = []
-        self.S_LGMD = []
-        self.in_LGMD = []
+        self.S_OUT = []
+        self.in_OUT = []
 
         for i in range(self.n_tiles_y):
             for j in range(self.n_tiles_x):
@@ -165,9 +171,9 @@ class LGMD_model(Base_model):
 
                 # neuron populations
 
-                self.LGMD.append(
+                self.OUT.append(
                     self.model.add_neuron_population(
-                        f"LGMD_{i}_{j}", 1, lgmd_neuron, LGMD_params, self.LGMD_inivars
+                        f"OUT_{i}_{j}", 1, lgmd_neuron, OUT_params, self.OUT_inivars
                     )
                 )
 
@@ -215,16 +221,16 @@ class LGMD_model(Base_model):
                     int(self.in_S_I_inivars["d"].max() + 1)
                 )
 
-                self.S_LGMD.append(
+                self.S_OUT.append(
                     self.model.add_synapse_population(
-                        f"S_LGMD_{i}_{j}",
+                        f"S_OUT_{i}_{j}",
                         "DENSE_INDIVIDUALG",
                         NO_DELAY,
                         self.S[-1],
-                        self.LGMD[-1],
+                        self.OUT[-1],
                         "StaticPulse",
                         {},
-                        {"g": p["W_S_LGMD"]},
+                        {"g": p["W_S_OUT"]},
                         {},
                         {},
                         "DeltaCurr",
@@ -233,25 +239,25 @@ class LGMD_model(Base_model):
                     )
                 )
 
-                self.in_LGMD.append(
+                self.in_OUT.append(
                     self.model.add_synapse_population(
-                        f"in_LGMD_{i}_{j}",
+                        f"in_OUT_{i}_{j}",
                         "DENSE_INDIVIDUALG",
-                        int(p["SYN_DELAY_IN_LGMD"]),
+                        int(p["SYN_DELAY_IN_OUT"]),
                         self.P[-1],
-                        self.LGMD[-1],
+                        self.OUT[-1],
                         "StaticPulse",
                         {},
-                        {"g": p["W_IN_LGMD"]},
+                        {"g": p["W_IN_OUT"]},
                         {},
                         {},
                         threshold_exp_curr,
-                        in_LGMD_params,
+                        in_OUT_params,
                         {},
                     )
                 )
 
-                self.in_LGMD[-1].ps_target_var = "Isyn_i"
+                self.in_OUT[-1].ps_target_var = "Isyn_i"
 
 
 def run_LGMD_sim(
@@ -262,10 +268,10 @@ def run_LGMD_sim(
     results_filename="results.npz",
     custom_params={},
     measure_sim_speed=False,
-    rec_neurons=[("LGMD", "V")]
+    rec_neurons=[("OUT", "V")]
 ):
     print("Running LGMD simulation")
-    p["REC_SPIKES"] = ["P", "S", "LGMD"]
+    p["REC_SPIKES"] = ["P", "S", "OUT"]
 
     evts = np.load(evt_file)
 
@@ -308,7 +314,7 @@ def run_LGMD_sim(
                 #        (-1, network.S_height, network.S_width),
                 #    )
                 #)
-                v_out[-1].append(rec_vars_n[f"VLGMD_{i}_{j}"].flatten())
+                v_out[-1].append(rec_vars_n[f"VOUT_{i}_{j}"].flatten())
 
                 sp_p[-1].append(
                     convert_spk_id_to_evt_array(
@@ -328,8 +334,8 @@ def run_LGMD_sim(
                 )
                 sp_out[-1].append(
                     convert_spk_id_to_evt_array(
-                        spike_ID[f"LGMD_{i}_{j}"],
-                        spike_t[f"LGMD_{i}_{j}"],
+                        spike_ID[f"OUT_{i}_{j}"],
+                        spike_t[f"OUT_{i}_{j}"],
                         1,
                         1,
                     )

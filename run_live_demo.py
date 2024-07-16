@@ -35,8 +35,8 @@ def should_quit(events):
 
 
 def exit_sim():
-    pl.plot(0, finished=True)
-    plot_output.plot(0, finished=True)
+    #pl.plot(0, finished=True)
+    #plot_output.plot(0, finished=True)
     #pl_hidden.plot(0, finished=True)
 
     for actor in actor_list:
@@ -84,15 +84,20 @@ class KeyControl:
 
 
 ##############################
+model = "LGMD"
+
+output_scale = 1.0 if model == "EMD" else 1000.0
+
 DT = 0.02
 DT_MS = int(DT * 1000)
 FPS = int(1.0 / DT)
 
 WIDTH, HEIGHT = 304, 240
 WIDTH_RGB, HEIGHT_RGB = 320, 240
+WIDTH_SHOW_RGB, HEIGHT_SHOW_RGB = 640, 480
 
-pl = NBPlot(mode="image", shape=(HEIGHT, WIDTH), vmin=-1, vmax=1, flip_y=False)
-plot_output = NBPlot(mode="line", n_lines=3, vmin=-1, vmax=1)
+#pl = NBPlot(mode="image", shape=(HEIGHT, WIDTH), vmin=-1, vmax=1, flip_y=False)
+#plot_output = NBPlot(mode="line", n_lines=3, vmin=-output_scale, vmax=output_scale)
 
 POS_CAM = carla.Location(x=2.5, y=0.0, z=1.0)
 ROT_CAM = carla.Rotation(pitch=0.0, yaw=0.0, roll=0.0)
@@ -103,8 +108,11 @@ DVS_LOG_EPS = 1e-1
 ##############################
 
 ## simulator settings ##
-Simulator = EMD_model
-params = params_emd
+#Simulator = EMD_model
+#params = params_emd
+
+Simulator = EMD_model if model == "EMD" else LGMD_model
+params = params_emd if model == "EMD" else params_lgmd
 
 N_SUBDIV = 2
 HALF_STRIDE = True
@@ -116,6 +124,7 @@ p["N_SUBDIV_X"] = N_SUBDIV
 p["N_SUBDIV_Y"] = N_SUBDIV
 p["DT_MS"] = DT_MS
 N_TILES = (N_SUBDIV * 2 - 1) if HALF_STRIDE else N_SUBDIV
+p["REC_SPIKES"] = []
 
 idx_center = N_SUBDIV // 2
 idx_tile_center = N_TILES * idx_center + idx_center
@@ -181,8 +190,8 @@ camera_event = world.spawn_actor(
 actor_list.append(camera_event)
 
 
-image_queue = queue.Queue()
-camera_rgb.listen(image_queue.put)
+#image_queue = queue.Queue()
+
 
 event_queue = queue.Queue()
 camera_event.listen(event_queue.put)
@@ -193,13 +202,15 @@ key_control = KeyControl(vehicle)
 ## start pygame ##
 pygame.init()
 
-display = pygame.display.set_mode((WIDTH_RGB, HEIGHT_RGB), pygame.HWSURFACE | pygame.DOUBLEBUF)
+display = pygame.display.set_mode((WIDTH_SHOW_RGB, HEIGHT_SHOW_RGB), pygame.HWSURFACE | pygame.DOUBLEBUF)
 
 clock = pygame.time.Clock()
 ###
 
+camera_rgb.listen(lambda x: draw_image(display, x, scale=(WIDTH_SHOW_RGB, HEIGHT_SHOW_RGB)))
+
 ## start simulator ##
-simulator = Simulator(p)
+#simulator = Simulator(p)
 
 #pl_hidden = NBPlot(
 #    mode="image",
@@ -220,15 +231,20 @@ def sim_loop():
 
         key_control.update(events)
 
-        image = image_queue.get()
+        #image = image_queue.get()
 
         if not event_queue.empty():
-            events_carla = event_queue.get()
-            events = convert_events(events_carla)
-            events_binned = downsample_events(events, WIDTH, HEIGHT, clip=1)
+            pass
+            #events_carla = event_queue.get()
+            #events = convert_events(events_carla)
+            #events_binned = downsample_events(events, WIDTH, HEIGHT, clip=1)
 
-            pl.plot(events_binned.reshape((HEIGHT, WIDTH)))
+            #del events
+            #del events_carla
 
+            #pl.plot(events_binned.reshape((HEIGHT, WIDTH)))
+
+            '''
             evts_idx = np.where(events_binned != 0)[0]
             x = (evts_idx % WIDTH).astype("<u2")
             y = (evts_idx // WIDTH).astype("<u2")
@@ -239,6 +255,12 @@ def sim_loop():
                 list(zip(st, x, y, pol)),
                 dtype=[("t", "<u4"), ("x", "<u2"), ("y", "<u2"), ("p", "<u2")],
             )
+
+            del x
+            del y
+            del st
+            del pol
+
             tld_evts = tiled_events(
                 evts_arr, WIDTH, HEIGHT, N_SUBDIV, N_SUBDIV, HALF_STRIDE
             )
@@ -257,16 +279,33 @@ def sim_loop():
             # push the data to the device
             simulator.push_input_data_to_device()
 
+            del x
+            del y
+            del st
+            del pol
+
+            del evts_arr
+            del tld_evts
+            del spike_bitmasks
+            del pol_bitmasks
+
             simulator.model.step_time()
 
             simulator.OUT[idx_tile_center].pull_var_from_device("V")
             V = simulator.OUT[idx_tile_center].vars["V"].view[0]
 
-            simulator.OUT[idx_tile_center].pull_var_from_device("r_left")
-            r_left = simulator.OUT[idx_tile_center].vars["r_left"].view[0]
+            if model == "EMD":
+                simulator.OUT[idx_tile_center].pull_var_from_device("r_left")
+                r_left = simulator.OUT[idx_tile_center].vars["r_left"].view[0]
 
-            simulator.OUT[idx_tile_center].pull_var_from_device("r_right")
-            r_right = simulator.OUT[idx_tile_center].vars["r_right"].view[0]
+                simulator.OUT[idx_tile_center].pull_var_from_device("r_right")
+                r_right = simulator.OUT[idx_tile_center].vars["r_right"].view[0]
+            else:
+                simulator.OUT[idx_tile_center].pull_var_from_device("VE")
+                r_left = simulator.OUT[idx_tile_center].vars["VE"].view[0]
+
+                simulator.OUT[idx_tile_center].pull_var_from_device("VI")
+                r_right = simulator.OUT[idx_tile_center].vars["VI"].view[0]
 
             #simulator.S[idx_tile_center].pull_var_from_device("vx")
             #vx = np.reshape(
@@ -276,20 +315,23 @@ def sim_loop():
 
             plot_output.plot(np.array([V, r_left, r_right]))
             #pl_hidden.plot(vx)
+            '''
 
-        draw_image(display, image)
+        #draw_image(display, image, scale=(WIDTH_SHOW_RGB, HEIGHT_SHOW_RGB))
+
+        #del image
 
         pygame.display.flip()
 
-        clock.tick(FPS)
+        #clock.tick(FPS)
     
     exit_sim()
-'''
+
 with Profile() as profile:
     sim_loop()
     print(Stats(profile)
           .strip_dirs()
           .sort_stats(SortKey.TIME)
           .print_stats())
-'''
-sim_loop()
+
+#sim_loop()
