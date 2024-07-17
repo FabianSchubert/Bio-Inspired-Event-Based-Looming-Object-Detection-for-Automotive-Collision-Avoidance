@@ -39,9 +39,10 @@ from src.config import EVENTS_DTYPE
 
 
 def on_collision(event, timer):
-    timer.end(event)
-    print("Collision detected")
-    print(event)
+    if timer.record:
+        timer.end(event)
+        print("Collision detected")
+        print(event)
 
 
 def should_quit(events):
@@ -118,15 +119,15 @@ DVS_REFR_TIME_NS = 0.001e9
 DVS_THRESHOLD = 0.2
 DVS_LOG_EPS = 1e-1
 
-SPAWN_DIST_CAR = 15.0
-SPAWN_DIST_PED = 15.0
+SPAWN_DIST_CAR = 20.0
+SPAWN_DIST_PED = 20.0
 
-R_RANDOM_OFFSET_MAX_CAR = 0.0
+R_RANDOM_OFFSET_MAX_CAR = 1.5
 R_RANDOM_OFFSET_MAX_PED = 1.0
 
 T_WAIT = 3.0
 T_MAX_SHOW = 4.0
-T_CUTOFF_START = 0.5
+T_CUTOFF_START = 0.05
 ##############################
 
 ##### DATA RECORDING SETTINGS ####
@@ -224,7 +225,8 @@ traffic_manager.ignore_vehicles_percentage(vehicle, 100)
 traffic_manager.ignore_walkers_percentage(vehicle, 100)
 traffic_manager.distance_to_leading_vehicle(vehicle, 0.0)
 # traffic_manager.vehicle_percentage_speed_difference(vehicle, 75)
-
+if not os.path.exists(base_fold):
+    os.makedirs(base_fold)
 files_in_fold = os.listdir(base_fold)
 index_example = len(files_in_fold)
 
@@ -391,21 +393,28 @@ while True:
             vehicle.set_autopilot(False)
             const_speed = vehicle.get_velocity().length()
 
-
     if timer.record:
         if (spawn_type != "none") and ground_fixed:
-
-            vehicle_control = carla.VehicleAckermannControl()
-
-            #vehicle_control = vehicle.get_control()
-            vehicle_control.steer = calc_steering_angle(
-                agent.get_transform().location, vehicle
+            #vehicle_control = carla.VehicleAckermannControl(
+            #    steer=calc_steering_angle(agent.get_transform().location, vehicle, prop_gain=0.2),
+            #    steer_speed=0.0,
+            #    speed=10.,#const_speed,
+            #)
+            vehicle_control = carla.VehicleControl(
+                steer=calc_steering_angle(agent.get_transform().location, vehicle, prop_gain=0.05),
+                throttle=0.75,
             )
-            #vehicle_control.throttle = 0.5
-            #vehicle_control.brake = 0.0
-            #vehicle_control.hand_brake = False
-            vehicle_control.speed = const_speed
-            vehicle.apply_ackermann_control(vehicle_control)
+            vehicle.apply_control(vehicle_control)
+            #vehicle.apply_ackermann_control(vehicle_control)
+            #print(const_speed)
+
+            # vehicle_control = vehicle.get_control()
+
+            # vehicle_control.throttle = 0.5
+            # vehicle_control.brake = 0.0
+            # vehicle_control.hand_brake = False
+            # vehicle_control.speed = const_speed
+            # 
 
             # traffic_manager.set_path(vehicle, [vehicle.get_location(), agent.get_location()])
 

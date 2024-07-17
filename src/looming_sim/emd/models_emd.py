@@ -124,7 +124,7 @@ out_neuron = genn_model.create_custom_neuron_class(
     const scalar filt_l = 1.0 / (1.0 + exp(-($(r_left) - $(filt_bias)) / $(filt_scale)));
     const scalar filt_r = 1.0 / (1.0 + exp(-($(r_right) - $(filt_bias)) / $(filt_scale)));
 
-    const scalar r_filt = 0.5 * ($(r_left) + $(r_right)) * filt_l * filt_r;
+    const scalar r_filt = min($(r_left), $(r_right)) * filt_l * filt_r;
     
     $(V) = $(alpha_m) * $(V) + (1.0 - $(alpha_m)) * r_filt;
     """,

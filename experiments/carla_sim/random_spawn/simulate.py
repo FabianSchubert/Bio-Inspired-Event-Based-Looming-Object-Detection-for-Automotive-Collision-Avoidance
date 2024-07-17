@@ -14,21 +14,22 @@ from .settings import base_fold_results, base_fold_input_data
 # from .settings import base_fold_input_data_front_brake as base_fold_input_data, base_fold_results_front_brake as base_fold_results
 
 
-run_sim = {"LGMD": run_LGMD_sim, "EMD": run_EMD_sim}
+#run_sim = {"LGMD": run_LGMD_sim, "EMD": run_EMD_sim}
+run_sim = {"EMD": run_EMD_sim}
 
 params_lgmd = params_lgmd.copy()
 params_emd = params_emd.copy()
 
-params_lgmd["DT_MS"] = 10
-params_emd["DT_MS"] = 10
+params_lgmd["DT_MS"] = 10.0
+params_emd["DT_MS"] = 10.0
 
 params = {"LGMD": params_lgmd, "EMD": params_emd}
 
 # run_sim = {"EMD": run_EMD_sim}
 
-coll_type = ["cars", "pedestrians", "none"]
+#coll_type = ["cars", "pedestrians", "none"]
 
-n_subdiv = [2, 3, 4]
+n_subdiv = [2]
 
 examples = os.listdir(base_fold_input_data)
 

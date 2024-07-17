@@ -385,8 +385,12 @@ def run_EMD_sim(
 
     evts = np.load(evt_file)
 
+    if len(evts) == 0:
+        print("No events in file")
+        return
+
     if t_end is None:
-        t_end = evts["t"][-1]
+        t_end = evts["t"].max()
 
     p["NT_MAX"] = int(t_end / p["DT_MS"]) + 1
 
