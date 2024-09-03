@@ -48,9 +48,18 @@ def exit_sim():
 
 
 class KeyControl:
-    def __init__(self, vehicle):
+    def __init__(self, vehicle, actor_list):
         self.control = carla.VehicleControl()
+        self.remote_control = carla.VehicleControl()
+
+        self.toggle_remote_car = queue.Queue()
+
         self.vehicle = vehicle
+        self.remote_vehicle = None
+
+        self.toggle_recording = queue.Queue()
+
+        self.actor_list = actor_list
 
     def parse_event(self, event):
         if event.type == pygame.KEYDOWN:
@@ -64,6 +73,20 @@ class KeyControl:
                 self.control.steer = 1.0
             elif event.key == pygame.K_r:
                 self.control.reverse = not self.control.reverse
+            elif event.key == pygame.K_SPACE:
+                self.toggle_recording.put(True)
+            elif event.key == pygame.K_c:
+                self.toggle_remote_car.put(True)
+            elif event.key == pygame.K_w:
+                self.remote_control.throttle = 1.0
+            elif event.key == pygame.K_s:
+                self.remote_control.brake = 1.0
+            elif event.key == pygame.K_a:
+                self.remote_control.steer = -1.0
+            elif event.key == pygame.K_d:
+                self.remote_control.steer = 1.0
+            elif event.key == pygame.K_q:
+                self.remote_control.reverse = not self.remote_control.reverse
         elif event.type == pygame.KEYUP:
             if event.key == pygame.K_UP:
                 self.control.throttle = 0.0
@@ -73,22 +96,52 @@ class KeyControl:
                 self.control.steer = 0.0
             elif event.key == pygame.K_RIGHT:
                 self.control.steer = 0.0
+            elif event.key == pygame.K_w:
+                self.remote_control.throttle = 0.0
+            elif event.key == pygame.K_s:
+                self.remote_control.brake = 0.0
+            elif event.key == pygame.K_a:
+                self.remote_control.steer = 0.0
+            elif event.key == pygame.K_d:
+                self.remote_control.steer = 0.0
 
     def apply_control(self):
         self.vehicle.apply_control(self.control)
+        if self.remote_vehicle is not None:
+            self.remote_vehicle.apply_control(self.remote_control)
 
     def update(self, events):
         for event in events:
             self.parse_event(event)
         self.apply_control()
 
+        if not self.toggle_remote_car.empty():
+            self.toggle_remote_car.get()
+            if self.remote_vehicle is not None:
+                self.remote_vehicle.destroy()
+                self.remote_vehicle = None
+            else:
+                vehicle_location = self.vehicle.get_transform().location
+
+                fwd_vector = self.vehicle.get_transform().get_forward_vector()
+
+                spawn_location = vehicle_location + fwd_vector * 10.0 + carla.Location(z=2.0)
+
+                self.remote_vehicle = world.spawn_actor(
+                    blueprint_library.find("vehicle.audi.a2"),
+                    carla.Transform(location=spawn_location)
+                )
+
+                self.actor_list.append(self.remote_vehicle)
+
+
 
 ##############################
-model = "LGMD"
+model = "EMD"
 
 output_scale = 1.0 if model == "EMD" else 1000.0
 
-DT = 0.02
+DT = 0.01
 DT_MS = int(DT * 1000)
 FPS = int(1.0 / DT)
 
@@ -96,8 +149,8 @@ WIDTH, HEIGHT = 304, 240
 WIDTH_RGB, HEIGHT_RGB = 320, 240
 WIDTH_SHOW_RGB, HEIGHT_SHOW_RGB = 640, 480
 
-#pl = NBPlot(mode="image", shape=(HEIGHT, WIDTH), vmin=-1, vmax=1, flip_y=False)
-#plot_output = NBPlot(mode="line", n_lines=3, vmin=-output_scale, vmax=output_scale)
+pl = NBPlot(mode="image", shape=(HEIGHT, WIDTH), vmin=-1, vmax=1, flip_y=False)
+plot_output = NBPlot(mode="line", n_lines=3, vmin=-output_scale, vmax=output_scale)
 
 POS_CAM = carla.Location(x=2.5, y=0.0, z=1.0)
 ROT_CAM = carla.Rotation(pitch=0.0, yaw=0.0, roll=0.0)
@@ -187,16 +240,18 @@ camera_event = world.spawn_actor(
     attach_to=vehicle,
 )
 
+remote_vehicle = None
+
 actor_list.append(camera_event)
 
 
-#image_queue = queue.Queue()
+image_queue = queue.Queue()
 
 
 event_queue = queue.Queue()
 camera_event.listen(event_queue.put)
 
-key_control = KeyControl(vehicle)
+key_control = KeyControl(vehicle, actor_list)
 ###
 
 ## start pygame ##
@@ -210,7 +265,7 @@ clock = pygame.time.Clock()
 camera_rgb.listen(lambda x: draw_image(display, x, scale=(WIDTH_SHOW_RGB, HEIGHT_SHOW_RGB)))
 
 ## start simulator ##
-#simulator = Simulator(p)
+simulator = Simulator(p)
 
 #pl_hidden = NBPlot(
 #    mode="image",
@@ -221,7 +276,15 @@ camera_rgb.listen(lambda x: draw_image(display, x, scale=(WIDTH_SHOW_RGB, HEIGHT
 #)
 
 def sim_loop():
+    recording = False
+
+    t = 0.0
+    t_0 = 0.0
+
+
     while True:
+        t += DT_MS
+
         events = pygame.event.get()
 
         if should_quit(events):
@@ -229,22 +292,41 @@ def sim_loop():
 
         world.tick()
 
-        key_control.update(events)
+        key_control.update(events)            
 
         #image = image_queue.get()
 
+        if not key_control.toggle_recording.empty():
+            key_control.toggle_recording.get()
+            recording = not recording
+
+            if recording:
+                print("Recording")
+                event_rec = np.array([], dtype=[("t", "<u4"), ("x", "<u2"), ("y", "<u2"), ("p", "<u2")])
+                r_left_rec = np.array([])
+                r_right_rec = np.array([])
+                V_rec = np.array([])
+                t_0 = t
+            else:
+                print("Stopped recording")
+                np.savez("recorded_live_demo.npz", events=event_rec, r_left=r_left_rec, r_right=r_right_rec, V=V_rec)
+                del event_rec
+                del r_left_rec
+                del r_right_rec
+                del V_rec
+
         if not event_queue.empty():
-            pass
-            #events_carla = event_queue.get()
-            #events = convert_events(events_carla)
-            #events_binned = downsample_events(events, WIDTH, HEIGHT, clip=1)
+            
+            events_carla = event_queue.get()
+            events = convert_events(events_carla)
+            events_binned = downsample_events(events, WIDTH, HEIGHT, clip=1)
 
-            #del events
-            #del events_carla
+            del events
+            del events_carla
 
-            #pl.plot(events_binned.reshape((HEIGHT, WIDTH)))
+            pl.plot(events_binned.reshape((HEIGHT, WIDTH)))
 
-            '''
+            
             evts_idx = np.where(events_binned != 0)[0]
             x = (evts_idx % WIDTH).astype("<u2")
             y = (evts_idx // WIDTH).astype("<u2")
@@ -255,6 +337,11 @@ def sim_loop():
                 list(zip(st, x, y, pol)),
                 dtype=[("t", "<u4"), ("x", "<u2"), ("y", "<u2"), ("p", "<u2")],
             )
+
+            if recording:
+                evts_arr_rec = np.copy(evts_arr)
+                evts_arr_rec["t"] = t - t_0
+                event_rec = np.append(event_rec, evts_arr_rec)
 
             del x
             del y
@@ -306,6 +393,11 @@ def sim_loop():
 
                 simulator.OUT[idx_tile_center].pull_var_from_device("VI")
                 r_right = simulator.OUT[idx_tile_center].vars["VI"].view[0]
+            
+            if recording:
+                r_left_rec = np.append(r_left_rec, r_left)
+                r_right_rec = np.append(r_right_rec, r_right)
+                V_rec = np.append(V_rec, V)
 
             #simulator.S[idx_tile_center].pull_var_from_device("vx")
             #vx = np.reshape(
@@ -315,7 +407,7 @@ def sim_loop():
 
             plot_output.plot(np.array([V, r_left, r_right]))
             #pl_hidden.plot(vx)
-            '''
+            
 
         #draw_image(display, image, scale=(WIDTH_SHOW_RGB, HEIGHT_SHOW_RGB))
 
@@ -323,15 +415,16 @@ def sim_loop():
 
         pygame.display.flip()
 
-        #clock.tick(FPS)
+        clock.tick(FPS)
     
     exit_sim()
 
+'''
 with Profile() as profile:
     sim_loop()
     print(Stats(profile)
           .strip_dirs()
           .sort_stats(SortKey.TIME)
           .print_stats())
-
-#sim_loop()
+'''
+sim_loop()
