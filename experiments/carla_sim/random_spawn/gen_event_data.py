@@ -108,9 +108,9 @@ DT = 0.01
 DT_MS = int(DT * 1000)
 FPS = int(1.0 / DT)
 
-WIDTH, HEIGHT = 304, 240
+WIDTH, HEIGHT = 640, 480
 
-WIDTH_RGB, HEIGHT_RGB = 304 * 3, 240 * 3
+WIDTH_RGB, HEIGHT_RGB = WIDTH * 1, HEIGHT * 1
 
 POS_CAM = carla.Location(x=2.5, y=0.0, z=1.0)
 ROT_CAM = carla.Rotation(pitch=0.0, yaw=0.0, roll=0.0)
@@ -118,6 +118,8 @@ ROT_CAM = carla.Rotation(pitch=0.0, yaw=0.0, roll=0.0)
 DVS_REFR_TIME_NS = 0.001e9
 DVS_THRESHOLD = 0.2
 DVS_LOG_EPS = 1e-1
+
+TARGET_SPEED_COLL_MPS = 30.0 / 3.6
 
 SPAWN_DIST_CAR = 20.0
 SPAWN_DIST_PED = 20.0
@@ -224,7 +226,7 @@ traffic_manager.ignore_signs_percentage(vehicle, 100)
 traffic_manager.ignore_vehicles_percentage(vehicle, 100)
 traffic_manager.ignore_walkers_percentage(vehicle, 100)
 traffic_manager.distance_to_leading_vehicle(vehicle, 0.0)
-# traffic_manager.vehicle_percentage_speed_difference(vehicle, 75)
+traffic_manager.vehicle_percentage_speed_difference(vehicle, (30.0 - TARGET_SPEED_COLL_MPS * 3.6) / 30.0)
 if not os.path.exists(base_fold):
     os.makedirs(base_fold)
 files_in_fold = os.listdir(base_fold)
@@ -262,6 +264,9 @@ while True:
         pol_evt_img_to_rgb(events_binned.reshape((HEIGHT, WIDTH))),
         scale=(WIDTH_RGB, HEIGHT_RGB),
     )
+
+    # get vehicle speed
+    print(f"{vehicle.get_velocity().length() * 3.6:.2f} km/h", end="\r")
 
     pygame.display.flip()
 
@@ -402,7 +407,8 @@ while True:
             #)
             vehicle_control = carla.VehicleControl(
                 steer=calc_steering_angle(agent.get_transform().location, vehicle, prop_gain=0.05),
-                throttle=0.75,
+                throttle=0.75 if vehicle.get_velocity().length() < TARGET_SPEED_COLL_MPS else 0.0,
+                brake=0.5 if vehicle.get_velocity().length() > TARGET_SPEED_COLL_MPS else 0.0,
             )
             vehicle.apply_control(vehicle_control)
             #vehicle.apply_ackermann_control(vehicle_control)
