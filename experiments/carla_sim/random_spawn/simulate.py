@@ -14,7 +14,7 @@ from .settings import base_fold_results, base_fold_input_data
 # from .settings import base_fold_input_data_front_brake as base_fold_input_data, base_fold_results_front_brake as base_fold_results
 
 
-#run_sim = {"LGMD": run_LGMD_sim, "EMD": run_EMD_sim}
+# run_sim = {"LGMD": run_LGMD_sim, "EMD": run_EMD_sim}
 run_sim = {"EMD": run_EMD_sim}
 
 params_lgmd = params_lgmd.copy()
@@ -27,7 +27,7 @@ params = {"LGMD": params_lgmd, "EMD": params_emd}
 
 # run_sim = {"EMD": run_EMD_sim}
 
-#coll_type = ["cars", "pedestrians", "none"]
+# coll_type = ["cars", "pedestrians", "none"]
 
 n_subdiv = [2]
 
@@ -48,5 +48,6 @@ for ex in examples:
                 custom_params={"N_SUBDIV_X": n_subd, "N_SUBDIV_Y": n_subd},
                 measure_sim_speed=False,
                 p=params[sim_name],
+                #rec_neurons=[("P", "V"), ("S", "one_to_one_p"), ("S", "vx"), ("S", "vy")],
             )
     sim = None

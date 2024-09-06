@@ -96,16 +96,7 @@ class EMD_model(Base_model):
         self.S_OUT_left_inivars = {"g": self.S_OUT_left_weights.flatten()}
         self.S_OUT_right_inivars = {"g": self.S_OUT_right_weights.flatten()}
 
-        self.pos_norm_mean_left = ((xs**2.0 + ys**2.0) * pos_weights)[
-            :, : self.S_width // 2
-        ].mean()
-        self.pos_norm_mean_right = ((xs**2.0 + ys**2.0) * pos_weights)[
-            :, self.S_width // 2 :
-        ].mean()
-
         self.S_params = {
-            "tau_v": p["TAU_V_S"],
-            "tau_px": p["TAU_PX_S"],
             "v_reg": p["V_REG_S"],
         }
 
@@ -114,13 +105,10 @@ class EMD_model(Base_model):
 
         self.OUT_params = {
             "output_scale": p["OUTPUT_SCALE"],
-            "r_reg": p["R_REG"],
             "tau_m": p["TAU_MEM_OUT"],
             "tau_r": p["TAU_R_OUT"],
             "filt_scale": p["FILT_SCALE_OUT"],
             "filt_bias": p["FILT_BIAS_OUT"],
-            "pos_norm_mean_left": self.pos_norm_mean_left,
-            "pos_norm_mean_right": self.pos_norm_mean_right,
         }
 
         _out_vars = [v.name for v in out_neuron.get_vars()]
@@ -148,6 +136,7 @@ class EMD_model(Base_model):
         )
 
         self.PN_S_one_to_one_iniconn = genn_model.init_connectivity(
+            #"FixedProbability", {"prob": 0.01}
             sparse_one_to_one_snippet_with_pad,
             {"pad_x": self.kernel_half_width,
              "pad_y": self.kernel_half_height,
@@ -174,9 +163,6 @@ class EMD_model(Base_model):
 
         self.S_OUT_v_proj_left = []
         self.S_OUT_v_proj_right = []
-
-        self.S_OUT_avg_act_left = []
-        self.S_OUT_avg_act_right = []
 
         for i in range(self.n_tiles_y):
             for j in range(self.n_tiles_x):
@@ -493,46 +479,6 @@ class EMD_model(Base_model):
 
                 self.S_OUT_v_proj_right[-1].ps_target_var = "Isyn_v_proj_right"
 
-                self.S_OUT_avg_act_left.append(
-                    self.model.add_synapse_population(
-                        f"S_OUT_avg_act_left_{i}_{j}",
-                        "DENSE_INDIVIDUALG",
-                        NO_DELAY,
-                        self.S[-1],
-                        self.OUT[-1],
-                        create_cont_wu("cont_wu_avg_act_left", "act_filt"),
-                        {},
-                        self.S_OUT_left_inivars,
-                        {},
-                        {},
-                        "DeltaCurr",
-                        {},
-                        {},
-                    ),
-                )
-
-                self.S_OUT_avg_act_left[-1].ps_target_var = "Isyn_avg_act_left"
-
-                self.S_OUT_avg_act_right.append(
-                    self.model.add_synapse_population(
-                        f"S_OUT_avg_act_right_{i}_{j}",
-                        "DENSE_INDIVIDUALG",
-                        NO_DELAY,
-                        self.S[-1],
-                        self.OUT[-1],
-                        create_cont_wu("cont_wu_avg_act_right", "act_filt"),
-                        {},
-                        self.S_OUT_right_inivars,
-                        {},
-                        {},
-                        "DeltaCurr",
-                        {},
-                        {},
-                    ),
-                )
-
-                self.S_OUT_avg_act_right[-1].ps_target_var = "Isyn_avg_act_right"
-
 
 def run_EMD_sim(
     evt_file,
@@ -542,8 +488,10 @@ def run_EMD_sim(
     results_filename="results.npz",
     custom_params={},
     measure_sim_speed=False,
-    rec_neurons=[("OUT", "V"), ("OUT", "r_left"), ("OUT", "r_right")],
+    rec_neurons=[],
 ):
+    rec_neurons = list(set([("OUT", "V"), ("OUT", "r_left"), ("OUT", "r_right")]) | set(rec_neurons))
+
     print("Running EMD simulation")
     p["REC_SPIKES"] = ["P", "S", "OUT"]
 
@@ -577,6 +525,7 @@ def run_EMD_sim(
         rec_timestep=rec_dt,
         measure_sim_speed=measure_sim_speed,
     )
+
     if not measure_sim_speed:
         #v_s = []
         v_out = []

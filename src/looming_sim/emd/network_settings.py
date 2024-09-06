@@ -28,26 +28,18 @@ params = {
     "HALF_STEP_TILES": True,
     "SPK_REC_STEPS": 100,
     #
-    "TAU_MEM_P": 20.0,
-    "TAU_I_P": 5.0,
-    "V_THRESH_P": 0.5,
-    "T_REFRAC_P": 50.0,
-    #
     "NORM_KERNEL": kernel_norm,
     "X_KERNEL": kernel_x,
     "Y_KERNEL": kernel_y,
     #
-    "TAU_V_S": 50.0,
-    "TAU_PX_S": 1.0,
-    "V_REG_S": 1e-2,
+    "V_REG_S": 10.0,
     #
     "SIGM_POS_WEIGHTS_X": 0.25,
     "SIGM_POS_WEIGHTS_Y": 0.25,
     #
-    "OUTPUT_SCALE": 500.0,
-    "R_REG": 1e-2,
+    "OUTPUT_SCALE": 10.0,
     "TAU_MEM_OUT": 50.0,
     "TAU_R_OUT": 20.0,
-    "FILT_SCALE_OUT": 0.05,
-    "FILT_BIAS_OUT": 0.1,
+    "FILT_SCALE_OUT": 0.5,
+    "FILT_BIAS_OUT": -0.5,
 }

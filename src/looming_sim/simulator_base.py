@@ -135,8 +135,8 @@ class Base_model(ABC):
         spike_bitmasks, pol_bitmasks = [], []
 
         for _x, _y, _st, _pol in zip(x, y, st, pol):
-            #assert np.amax(_x) < self.tile_width
-            #assert np.amax(_y) < self.tile_height
+            # assert np.amax(_x) < self.tile_width
+            # assert np.amax(_y) < self.tile_height
             spike_bitmasks.append(
                 spike_bitmask(
                     _st,
@@ -180,21 +180,23 @@ class Base_model(ABC):
         to gpu memory.
         """
         for idx in range(self.n_tiles_x * self.n_tiles_y):
-            self.input[idx].extra_global_params["spikeBitmask"].view[:] = self.spk_bm[
-                idx
-            ].view(dtype=np.uint32)
-            self.input[idx].push_extra_global_param_to_device("spikeBitmask")
+            for _inp_pop in (self.P_input[idx], self.N_input[idx]):
+                _inp_pop.extra_global_params["spikeBitmask"].view[:] = self.spk_bm[
+                    idx
+                ].view(dtype=np.uint32)
+                _inp_pop.push_extra_global_param_to_device("spikeBitmask")
 
-            self.input[idx].extra_global_params["polarityBitmask"].view[:] = (
-                self.pol_bm[idx].view(dtype=np.uint32)
-            )
-            self.input[idx].push_extra_global_param_to_device("polarityBitmask")
+                _inp_pop.extra_global_params["polarityBitmask"].view[:] = self.pol_bm[
+                    idx
+                ].view(dtype=np.uint32)
+                _inp_pop.push_extra_global_param_to_device("polarityBitmask")
 
     def free_input_egp(self):
         for idx in range(self.n_tiles_x * self.n_tiles_y):
-            self.input[idx].extra_global_params["spikeBitmask"].view = None
-            self.input[idx].extra_global_params["polarityBitmask"].view = None
-            self.input[idx].unload()
+            for _inp_pop in (self.P_input[idx], self.N_input[idx]):
+                _inp_pop.extra_global_params["spikeBitmask"].view = None
+                _inp_pop.extra_global_params["polarityBitmask"].view = None
+                _inp_pop.unload()
 
     def end(self):
         """Free memory"""
