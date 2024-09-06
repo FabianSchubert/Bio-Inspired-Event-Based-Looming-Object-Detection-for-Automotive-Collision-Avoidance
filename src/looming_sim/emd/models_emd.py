@@ -53,16 +53,15 @@ s_neuron = genn_model.create_custom_neuron_class(
     "S",
     param_names=["tau_v", "tau_px", "v_reg"],
     var_name_types=[
-        ("px", "scalar"),
-        ("py", "scalar"),
-        ("px_prev", "scalar"),
-        ("py_prev", "scalar"),
-        ("sp_in", "scalar"),
-        ("sp_in_prev", "scalar"),
+        ("x_p", "scalar"),
+        ("y_p", "scalar"),
+        ("norm_p", "scalar"),
+        ("x_n", "scalar"),
+        ("y_n", "scalar"),
+        ("norm_n", "scalar"),
         ("vx", "scalar"),
         ("vy", "scalar"),
         ("v_proj", "scalar"),
-        ("act_filt", "scalar"),
     ],
     derived_params=[
         (
@@ -75,22 +74,14 @@ s_neuron = genn_model.create_custom_neuron_class(
         ),
     ],
     sim_code="""
-    //$(x_prev_p) = $(x_p);
-    //$(y_prev_p) = $(y_p);
-    //$(norm_prev_p) = $(norm_p);
-
-    //$(x_prev_n) = $(x_n);
-    //$(y_prev_n) = $(y_n);
-    //$(norm_prev_n) = $(norm_n);
-
     const scalar vx_est_p = -$(Isyn_p_one_to_one) * $(x_p) * DT / ($(v_reg) + DT * DT * $(norm_p));
     const scalar vy_est_p = -$(Isyn_p_one_to_one) * $(y_p) * DT / ($(v_reg) + DT * DT * $(norm_p));
 
     const scalar vx_est_n = -$(Isyn_n_one_to_one) * $(x_n) * DT / ($(v_reg) + DT * DT * $(norm_n));
     const scalar vy_est_n = -$(Isyn_n_one_to_one) * $(y_n) * DT / ($(v_reg) + DT * DT * $(norm_n));
 
-    const scalar vx_est = vx_est_p + vx_est_n;
-    const scalar vy_est = vy_est_p + vy_est_n; 
+    $(vx) = vx_est_p + vx_est_n;
+    $(vy) = vy_est_p + vy_est_n; 
 
     $(x_p) = $(Isyn_p_x);
     $(y_p) = $(Isyn_p_y);
@@ -99,18 +90,6 @@ s_neuron = genn_model.create_custom_neuron_class(
     $(x_n) = $(Isyn_n_x);
     $(y_n) = $(Isyn_n_y);
     $(norm_n) = $(Isyn_n_norm);
-
-    //$(px) = $(px) * $(alpha_px) + (1.-$(alpha_px)) * $(Isyn_x);
-    //$(py) = $(py) * $(alpha_px) + (1.-$(alpha_px)) * $(Isyn_y);
-    //$(sp_in) = $(sp_in) * $(alpha_px) + (1.-$(alpha_px)) * $(Isyn_sp_in);
-
-    //$(act_filt) = $(alpha_v) * $(act_filt) + (1.0 - $(alpha_v)) * $(sp_in);
-
-    //const scalar vx_est = ($(px) * $(sp_in_prev) - $(px_prev) * $(sp_in)) / (DT * ($(v_reg) + $(sp_in) * $(sp_in_prev)));
-    //const scalar vy_est = ($(py) * $(sp_in_prev) - $(py_prev) * $(sp_in)) / (DT * ($(v_reg) + $(sp_in) * $(sp_in_prev)));
-
-    //$(vx) = $(alpha_v) * $(vx) + (1.0 - $(alpha_v)) * vx_est;
-    //$(vy) = $(alpha_v) * $(vy) + (1.0 - $(alpha_v)) * vy_est;
 
     $(v_proj) = $(vx) * $(x)[$(id)] + $(vy) * $(y)[$(id)];
     """,
@@ -201,16 +180,20 @@ sparse_one_to_one_snippet_with_pad = genn_model.create_custom_sparse_connect_ini
     "sparse_one_to_one_snippet_with_pad",
     param_names=["pad_x", "pad_y", "width_pre", "height_pre"],
     row_build_code="""
-    const unsigned int x_pre = $(id_pre) % $(width_pre);
-    const unsigned int y_pre = $(id_pre) / $(width_pre);
+    const int width_pre = (int)($(width_pre));
+    const int height_pre = (int)($(height_pre));
+    const int pad_x = (int)($(pad_x));
+    const int pad_y = (int)($(pad_y));
 
-    const unsigned int x_post = x_pre + $(pad_x);
-    const unsigned int y_post = y_pre + $(pad_y);
+    const unsigned int x_pre = $(id_pre) % width_pre;
+    const unsigned int y_pre = $(id_pre) / width_pre;
 
-    const unsigned int id_post = x_post + y_post * ($(width_pre) + 2 * $(pad_x));
+    const unsigned int x_post = x_pre + pad_x;
+    const unsigned int y_post = y_pre + pad_y;
 
-    const unsigned int target = (2 * $(pad_x) + $(width_pre)) * $(pad_y)
-    $(addSynapse, target);
+    const unsigned int id_post = x_post + y_post * (width_pre + 2 * pad_x);
+
+    $(addSynapse, id_post);
     $(endRow);
     """,
     calc_max_row_len_func=genn_model.create_cmlf_class(lambda num_pre, num_post, pars: 1)(),

@@ -6,5 +6,5 @@ base_fold_input_data = os.path.join(
 
 base_fold_results = os.path.join(
     os.path.dirname(__file__),
-    "../../../data/experiments/carla_sim/random_spawn/"
+    "../../../data/experiments/carla_sim/random_spawn/on_off_cells/"
 )

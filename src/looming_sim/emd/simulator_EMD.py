@@ -53,9 +53,9 @@ class EMD_model(Base_model):
         self.delta_x = 2.0 / (self.S_width - 1)
 
         # check it's normalised
-        assert self.norm_kernel.sum() == 1.0, "norm_kernel must be normalised to 1"
+        np.testing.assert_almost_equal(self.norm_kernel.sum(), 1.0, decimal=5)
 
-        self.PN_S_norm_inivars = {"g": self.P_S_i_kernel.flatten()}
+        self.PN_S_norm_inivars = {"g": self.norm_kernel.flatten()}
 
         # x derivative by shifting left and right.
         self.x_kernel = p["X_KERNEL"]
@@ -158,7 +158,7 @@ class EMD_model(Base_model):
         self.P = []
         self.N = []
         self.P_input = []
-        self.S_input = []
+        self.N_input = []
         self.S = []
         self.OUT = []
 
@@ -195,7 +195,7 @@ class EMD_model(Base_model):
 
                 self.P_input.append(
                     self.model.add_current_source(
-                        f"input_{i}_{j}",
+                        f"P_input_{i}_{j}",
                         bitmask_array_current_source,
                         self.P[-1],
                         input_params,
@@ -205,7 +205,7 @@ class EMD_model(Base_model):
 
                 self.N_input.append(
                     self.model.add_current_source(
-                        f"input_{i}_{j}",
+                        f"N_input_{i}_{j}",
                         bitmask_array_current_source,
                         self.N[-1],
                         input_params,
