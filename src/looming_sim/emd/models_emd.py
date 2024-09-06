@@ -33,10 +33,21 @@ p_neuron = genn_model.create_custom_neuron_class(
     param_names=[],
     var_name_types=[("V", "scalar")],
     sim_code="$(V) = $(Isyn);",
-    threshold_condition_code="$(V) != 0.0",
+    threshold_condition_code="$(V) > 0.0",
     reset_code=None,
     is_auto_refractory_required=False,
 )
+
+n_neuron = genn_model.create_custom_neuron_class(
+    "N",
+    param_names=[],
+    var_name_types=[("V", "scalar")],
+    sim_code="$(V) = $(Isyn);",
+    threshold_condition_code="$(V) < 0.0",
+    reset_code=None,
+    is_auto_refractory_required=False,
+)
+
 
 s_neuron = genn_model.create_custom_neuron_class(
     "S",
@@ -61,32 +72,58 @@ s_neuron = genn_model.create_custom_neuron_class(
         (
             "alpha_px",
             genn_model.create_dpf_class(lambda pars, dt: np.exp(-dt / pars[1]))(),
-        )
+        ),
     ],
     sim_code="""
-    $(px_prev) = $(px);
-    $(py_prev) = $(py);
-    $(sp_in_prev) = $(sp_in);
+    //$(x_prev_p) = $(x_p);
+    //$(y_prev_p) = $(y_p);
+    //$(norm_prev_p) = $(norm_p);
 
-    $(px) = $(px) * $(alpha_px) + (1.-$(alpha_px)) * $(Isyn_x);
-    $(py) = $(py) * $(alpha_px) + (1.-$(alpha_px)) * $(Isyn_y);
-    $(sp_in) = $(sp_in) * $(alpha_px) + (1.-$(alpha_px)) * $(Isyn_sp_in);
+    //$(x_prev_n) = $(x_n);
+    //$(y_prev_n) = $(y_n);
+    //$(norm_prev_n) = $(norm_n);
 
-    $(act_filt) = $(alpha_v) * $(act_filt) + (1.0 - $(alpha_v)) * $(sp_in);
+    const scalar vx_est_p = -$(Isyn_p_one_to_one) * $(x_p) * DT / ($(v_reg) + DT * DT * $(norm_p));
+    const scalar vy_est_p = -$(Isyn_p_one_to_one) * $(y_p) * DT / ($(v_reg) + DT * DT * $(norm_p));
 
-    const scalar vx_est = ($(px) * $(sp_in_prev) - $(px_prev) * $(sp_in)) / (DT * ($(v_reg) + $(sp_in) * $(sp_in_prev)));
-    const scalar vy_est = ($(py) * $(sp_in_prev) - $(py_prev) * $(sp_in)) / (DT * ($(v_reg) + $(sp_in) * $(sp_in_prev)));
+    const scalar vx_est_n = -$(Isyn_n_one_to_one) * $(x_n) * DT / ($(v_reg) + DT * DT * $(norm_n));
+    const scalar vy_est_n = -$(Isyn_n_one_to_one) * $(y_n) * DT / ($(v_reg) + DT * DT * $(norm_n));
 
-    $(vx) = $(alpha_v) * $(vx) + (1.0 - $(alpha_v)) * vx_est;
-    $(vy) = $(alpha_v) * $(vy) + (1.0 - $(alpha_v)) * vy_est;
+    const scalar vx_est = vx_est_p + vx_est_n;
+    const scalar vy_est = vy_est_p + vy_est_n; 
+
+    $(x_p) = $(Isyn_p_x);
+    $(y_p) = $(Isyn_p_y);
+    $(norm_p) = $(Isyn_p_norm);
+
+    $(x_n) = $(Isyn_n_x);
+    $(y_n) = $(Isyn_n_y);
+    $(norm_n) = $(Isyn_n_norm);
+
+    //$(px) = $(px) * $(alpha_px) + (1.-$(alpha_px)) * $(Isyn_x);
+    //$(py) = $(py) * $(alpha_px) + (1.-$(alpha_px)) * $(Isyn_y);
+    //$(sp_in) = $(sp_in) * $(alpha_px) + (1.-$(alpha_px)) * $(Isyn_sp_in);
+
+    //$(act_filt) = $(alpha_v) * $(act_filt) + (1.0 - $(alpha_v)) * $(sp_in);
+
+    //const scalar vx_est = ($(px) * $(sp_in_prev) - $(px_prev) * $(sp_in)) / (DT * ($(v_reg) + $(sp_in) * $(sp_in_prev)));
+    //const scalar vy_est = ($(py) * $(sp_in_prev) - $(py_prev) * $(sp_in)) / (DT * ($(v_reg) + $(sp_in) * $(sp_in_prev)));
+
+    //$(vx) = $(alpha_v) * $(vx) + (1.0 - $(alpha_v)) * vx_est;
+    //$(vy) = $(alpha_v) * $(vy) + (1.0 - $(alpha_v)) * vy_est;
 
     $(v_proj) = $(vx) * $(x)[$(id)] + $(vy) * $(y)[$(id)];
     """,
     extra_global_params=[("x", "scalar*"), ("y", "scalar*")],
     additional_input_vars=[
-        ("Isyn_x", "scalar", 0.0),
-        ("Isyn_y", "scalar", 0.0),
-        ("Isyn_sp_in", "scalar", 0.0),
+        ("Isyn_p_x", "scalar", 0.0),
+        ("Isyn_p_y", "scalar", 0.0),
+        ("Isyn_p_norm", "scalar", 0.0),
+        ("Isyn_p_one_to_one", "scalar", 0.0),
+        ("Isyn_n_x", "scalar", 0.0),
+        ("Isyn_n_y", "scalar", 0.0),
+        ("Isyn_n_norm", "scalar", 0.0),
+        ("Isyn_n_one_to_one", "scalar", 0.0),
     ],
     is_auto_refractory_required=False,
 )
@@ -136,6 +173,13 @@ out_neuron = genn_model.create_custom_neuron_class(
     ],
 )
 
+sp_wu_with_v_pre = genn_model.create_custom_weight_update_class(
+    "sp_wu_with_pre",
+    param_names=[],
+    var_name_types=[("g", "scalar")],
+    sim_code="$(addToInSyn, $(g) * $(V_pre));",
+)
+
 
 def create_cont_wu(name: str, var_name: str):
     return genn_model.create_custom_weight_update_class(
@@ -151,4 +195,24 @@ cont_wu = genn_model.create_custom_weight_update_class(
     param_names=[],
     var_name_types=[("g", "scalar")],
     synapse_dynamics_code="$(addToInSyn, $(g) * $(V_pre));",
+)
+
+sparse_one_to_one_snippet_with_pad = genn_model.create_custom_sparse_connect_init_snippet_class(
+    "sparse_one_to_one_snippet_with_pad",
+    param_names=["pad_x", "pad_y", "width_pre", "height_pre"],
+    row_build_code="""
+    const unsigned int x_pre = $(id_pre) % $(width_pre);
+    const unsigned int y_pre = $(id_pre) / $(width_pre);
+
+    const unsigned int x_post = x_pre + $(pad_x);
+    const unsigned int y_post = y_pre + $(pad_y);
+
+    const unsigned int id_post = x_post + y_post * ($(width_pre) + 2 * $(pad_x));
+
+    const unsigned int target = (2 * $(pad_x) + $(width_pre)) * $(pad_y)
+    $(addSynapse, target);
+    $(endRow);
+    """,
+    calc_max_row_len_func=genn_model.create_cmlf_class(lambda num_pre, num_post, pars: 1)(),
+    calc_max_col_len_func=genn_model.create_cmlf_class(lambda num_pre, num_post, pars: 1)(),
 )

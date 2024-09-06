@@ -4,7 +4,7 @@ import os
 
 from pygenn import genn_model
 from pygenn.genn_wrapper import NO_DELAY
-from .models_emd import p_neuron, s_neuron, out_neuron, cont_wu, create_cont_wu
+from .models_emd import p_neuron, n_neuron, s_neuron, out_neuron, cont_wu, sparse_one_to_one_snippet_with_pad, create_cont_wu
 
 from .network_settings import params
 
@@ -25,21 +25,21 @@ def weights(x: np.ndarray, y: np.ndarray, sigma_x: float, sigma_y: float):
 class EMD_model(Base_model):
     def define_network(self, p):
         P_params = {}
-        # P_params = {
-        #    "tau_m": p["TAU_MEM_P"],
-        #    "tau_i": p["TAU_I_P"],
-        #    "th": p["V_THRESH_P"],
-        # }
+        N_params = {}
+        
         _p_vars = [v.name for v in p_neuron.get_vars()]
         self.P_inivars = dict(zip(_p_vars, [0.0] * len(_p_vars)))
+
+        _n_vars = [v.name for v in n_neuron.get_vars()]
+        self.N_inivars = dict(zip(_n_vars, [0.0] * len(_n_vars)))
 
         # input current sources (spike source array of DVS events)
         input_params = {"unit_amplitude": 1.0}
 
         self.input_inivars = {"nt": self.nt_max, "pop_size": self.n_input}
 
-        self.P_S_i_kernel = p["P_S_KERNEL"]
-        self.kernel_height, self.kernel_width = self.P_S_i_kernel.shape
+        self.norm_kernel = p["NORM_KERNEL"]
+        self.kernel_height, self.kernel_width = self.norm_kernel.shape
 
         assert self.kernel_height % 2 != 0, "kernel height must be uneven"
         assert self.kernel_width % 2 != 0, "kernel width must be uneven"
@@ -52,24 +52,19 @@ class EMD_model(Base_model):
 
         self.delta_x = 2.0 / (self.S_width - 1)
 
-        # just to make sure it's normalised
-        self.P_S_i_kernel /= self.P_S_i_kernel.sum()
+        # check it's normalised
+        assert self.norm_kernel.sum() == 1.0, "norm_kernel must be normalised to 1"
 
-        self.P_S_i_inivars = {"g": self.P_S_i_kernel.flatten()}
+        self.PN_S_norm_inivars = {"g": self.P_S_i_kernel.flatten()}
 
         # x derivative by shifting left and right.
-        x_kernel, y_kernel = np.meshgrid(
-            (np.arange(self.kernel_width) - self.kernel_width // 2) * self.delta_x,
-            (np.arange(self.kernel_height) - self.kernel_height // 2) * self.delta_x,
-        )
-        self.P_S_x_kernel = self.P_S_i_kernel * x_kernel
+        self.x_kernel = p["X_KERNEL"]
+        self.y_kernel = p["Y_KERNEL"]
 
-        self.P_S_x_inivars = {"g": self.P_S_x_kernel.flatten()}
+        self.PN_S_x_inivars = {"g": self.x_kernel.flatten()}
+        self.PN_S_y_inivars = {"g": self.y_kernel.flatten()}
 
-        # same for y
-        self.P_S_y_kernel = self.P_S_i_kernel * y_kernel
-
-        self.P_S_y_inivars = {"g": self.P_S_y_kernel.flatten()}
+        self.PN_S_one_to_one_inivars = {"g": 1.0}
 
         self.n_S = self.S_width * self.S_height
 
@@ -148,32 +143,57 @@ class EMD_model(Base_model):
             "conv_oc": 1,
         }
 
-        self.P_S_iniconn = genn_model.init_toeplitz_connectivity(
+        self.PN_S_kernel_iniconn = genn_model.init_toeplitz_connectivity(
             "Conv2D", self.I_kernel_params
         )
 
+        self.PN_S_one_to_one_iniconn = genn_model.init_connectivity(
+            sparse_one_to_one_snippet_with_pad,
+            {"pad_x": self.kernel_half_width,
+             "pad_y": self.kernel_half_height,
+             "width_pre": self.tile_width,
+             "height_pre": self.tile_height},
+        )
+
         self.P = []
-        self.input = []
+        self.N = []
+        self.P_input = []
+        self.S_input = []
         self.S = []
         self.OUT = []
 
         self.P_S_x = []
         self.P_S_y = []
-        self.P_S_i = []
+        self.P_S_norm = []
+        self.P_S_one_to_one = []
+        
+        self.N_S_x = []
+        self.N_S_y = []
+        self.N_S_norm = []
+        self.N_S_one_to_one = []
+
         self.S_OUT_v_proj_left = []
         self.S_OUT_v_proj_right = []
+
         self.S_OUT_avg_act_left = []
         self.S_OUT_avg_act_right = []
 
         for i in range(self.n_tiles_y):
             for j in range(self.n_tiles_x):
+
                 self.P.append(
                     self.model.add_neuron_population(
                         f"P_{i}_{j}", self.n_input, p_neuron, P_params, self.P_inivars
                     )
                 )
 
-                self.input.append(
+                self.N.append(
+                    self.model.add_neuron_population(
+                        f"N_{i}_{j}", self.n_input, n_neuron, N_params, self.N_inivars
+                    )
+                )
+
+                self.P_input.append(
                     self.model.add_current_source(
                         f"input_{i}_{j}",
                         bitmask_array_current_source,
@@ -183,7 +203,17 @@ class EMD_model(Base_model):
                     )
                 )
 
-                self.input[-1].set_extra_global_param(
+                self.N_input.append(
+                    self.model.add_current_source(
+                        f"input_{i}_{j}",
+                        bitmask_array_current_source,
+                        self.N[-1],
+                        input_params,
+                        self.input_inivars,
+                    )
+                )
+
+                self.P_input[-1].set_extra_global_param(
                     "spikeBitmask",
                     np.packbits(
                         np.zeros(
@@ -197,7 +227,35 @@ class EMD_model(Base_model):
                     .view(dtype=np.uint32),
                 )
 
-                self.input[-1].set_extra_global_param(
+                self.P_input[-1].set_extra_global_param(
+                    "polarityBitmask",
+                    np.packbits(
+                        np.zeros(
+                            (self.nt_max, 32 * int(np.ceil(self.n_input / 32))),
+                            dtype=np.uint8,
+                        ),
+                        axis=1,
+                        bitorder="little",
+                    )
+                    .flatten()
+                    .view(dtype=np.uint32),
+                )
+
+                self.N_input[-1].set_extra_global_param(
+                    "spikeBitmask",
+                    np.packbits(
+                        np.zeros(
+                            (self.nt_max, 32 * int(np.ceil(self.n_input / 32))),
+                            dtype=np.uint8,
+                        ),
+                        axis=1,
+                        bitorder="little",
+                    )
+                    .flatten()
+                    .view(dtype=np.uint32),
+                )
+
+                self.N_input[-1].set_extra_global_param(
                     "polarityBitmask",
                     np.packbits(
                         np.zeros(
@@ -235,17 +293,17 @@ class EMD_model(Base_model):
                         self.S[-1],
                         "StaticPulse",
                         {},
-                        self.P_S_x_inivars,
+                        self.PN_S_x_inivars,
                         {},
                         {},
                         "DeltaCurr",
                         {},
                         {},
-                        self.P_S_iniconn,
+                        self.PN_S_kernel_iniconn,
                     )
                 )
 
-                self.P_S_x[-1].ps_target_var = "Isyn_x"
+                self.P_S_x[-1].ps_target_var = "Isyn_p_x"
 
                 self.P_S_y.append(
                     self.model.add_synapse_population(
@@ -256,38 +314,144 @@ class EMD_model(Base_model):
                         self.S[-1],
                         "StaticPulse",
                         {},
-                        self.P_S_y_inivars,
+                        self.PN_S_y_inivars,
                         {},
                         {},
                         "DeltaCurr",
                         {},
                         {},
-                        self.P_S_iniconn,
+                        self.PN_S_kernel_iniconn,
                     )
                 )
 
-                self.P_S_y[-1].ps_target_var = "Isyn_y"
+                self.P_S_y[-1].ps_target_var = "Isyn_p_y"
 
-                self.P_S_i.append(
+                self.P_S_norm.append(
                     self.model.add_synapse_population(
-                        f"P_S_i_{i}_{j}",
+                        f"P_S_norm_{i}_{j}",
                         "TOEPLITZ_KERNELG",
                         NO_DELAY,
                         self.P[-1],
                         self.S[-1],
                         "StaticPulse",
                         {},
-                        self.P_S_i_inivars,
+                        self.PN_S_norm_inivars,
                         {},
                         {},
                         "DeltaCurr",
                         {},
                         {},
-                        self.P_S_iniconn,
+                        self.PN_S_kernel_iniconn,
                     )
                 )
 
-                self.P_S_i[-1].ps_target_var = "Isyn_sp_in"
+                self.P_S_norm[-1].ps_target_var = "Isyn_p_norm"
+
+                self.P_S_one_to_one.append(
+                    self.model.add_synapse_population(
+                        f"P_S_one_to_one_{i}_{j}",
+                        "SPARSE_GLOBALG",
+                        NO_DELAY,
+                        self.P[-1],
+                        self.S[-1],
+                        "StaticPulse",
+                        {},
+                        self.PN_S_one_to_one_inivars,
+                        {},
+                        {},
+                        "DeltaCurr",
+                        {},
+                        {},
+                        self.PN_S_one_to_one_iniconn,
+                    )
+                )
+
+                self.P_S_one_to_one[-1].ps_target_var = "Isyn_p_one_to_one"
+
+                self.N_S_x.append(
+                    self.model.add_synapse_population(
+                        f"P_N_x_{i}_{j}",
+                        "TOEPLITZ_KERNELG",
+                        NO_DELAY,
+                        self.N[-1],
+                        self.S[-1],
+                        "StaticPulse",
+                        {},
+                        self.PN_S_x_inivars,
+                        {},
+                        {},
+                        "DeltaCurr",
+                        {},
+                        {},
+                        self.PN_S_kernel_iniconn,
+                    )
+                )
+
+                self.N_S_x[-1].ps_target_var = "Isyn_n_x"
+
+                self.N_S_y.append(
+                    self.model.add_synapse_population(
+                        f"N_S_y_{i}_{j}",
+                        "TOEPLITZ_KERNELG",
+                        NO_DELAY,
+                        self.N[-1],
+                        self.S[-1],
+                        "StaticPulse",
+                        {},
+                        self.PN_S_y_inivars,
+                        {},
+                        {},
+                        "DeltaCurr",
+                        {},
+                        {},
+                        self.PN_S_kernel_iniconn,
+                    )
+                )
+
+                self.N_S_y[-1].ps_target_var = "Isyn_n_y"
+
+                self.N_S_norm.append(
+                    self.model.add_synapse_population(
+                        f"N_S_norm_{i}_{j}",
+                        "TOEPLITZ_KERNELG",
+                        NO_DELAY,
+                        self.N[-1],
+                        self.S[-1],
+                        "StaticPulse",
+                        {},
+                        self.PN_S_norm_inivars,
+                        {},
+                        {},
+                        "DeltaCurr",
+                        {},
+                        {},
+                        self.PN_S_kernel_iniconn,
+                    )
+                )
+
+                self.N_S_norm[-1].ps_target_var = "Isyn_n_norm"
+
+                self.N_S_one_to_one.append(
+                    self.model.add_synapse_population(
+                        f"N_S_one_to_one_{i}_{j}",
+                        "SPARSE_GLOBALG",
+                        NO_DELAY,
+                        self.N[-1],
+                        self.S[-1],
+                        "StaticPulse",
+                        {},
+                        self.PN_S_one_to_one_inivars,
+                        {},
+                        {},
+                        "DeltaCurr",
+                        {},
+                        {},
+                        self.PN_S_one_to_one_iniconn,
+                    )
+                )
+
+                self.N_S_one_to_one[-1].ps_target_var = "Isyn_n_one_to_one"
+
 
                 self.S_OUT_v_proj_left.append(
                     self.model.add_synapse_population(

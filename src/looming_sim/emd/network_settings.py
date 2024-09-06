@@ -1,12 +1,17 @@
 import numpy as np
 
-kern_w = 13
+half_kern_w = 2
 
 sigm_kernel = 0.3
 
-x, y = np.meshgrid(np.linspace(-1.,1.,kern_w), np.linspace(-1.,1.,kern_w))
-kernel_p_s = np.exp(-(x**2.0 + y**2.0) / (2.0 * sigm_kernel**2.0))
-kernel_p_s /= np.sum(kernel_p_s)
+x, y = np.meshgrid(
+    np.arange(-half_kern_w, half_kern_w + 1), np.arange(-half_kern_w, half_kern_w + 1)
+)
+kernel_norm = np.exp(-(x**2.0 + y**2.0) / (2.0 * (sigm_kernel * half_kern_w) ** 2.0))
+kernel_norm /= np.sum(kernel_norm)
+
+kernel_x = x * kernel_norm
+kernel_y = y * kernel_norm
 
 params = {
     "NAME": "EMD_model",
@@ -16,8 +21,8 @@ params = {
     "N_BATCH": 1,
     "MODEL_SEED": None,
     "REC_SPIKES": ["P", "S", "OUT"],
-    "INPUT_WIDTH": 640,#304,
-    "INPUT_HEIGHT": 480,#240,
+    "INPUT_WIDTH": 640,  # 304,
+    "INPUT_HEIGHT": 480,  # 240,
     "N_SUBDIV_X": 1,
     "N_SUBDIV_Y": 1,
     "HALF_STEP_TILES": True,
@@ -28,7 +33,9 @@ params = {
     "V_THRESH_P": 0.5,
     "T_REFRAC_P": 50.0,
     #
-    "P_S_KERNEL": kernel_p_s,
+    "NORM_KERNEL": kernel_norm,
+    "X_KERNEL": kernel_x,
+    "Y_KERNEL": kernel_y,
     #
     "TAU_V_S": 50.0,
     "TAU_PX_S": 1.0,
