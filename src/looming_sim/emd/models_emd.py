@@ -107,7 +107,6 @@ out_neuron = genn_model.create_custom_neuron_class(
     param_names=[
         "output_scale",
         "tau_m",
-        "tau_r",
         "filt_scale",
         "filt_bias",
     ],
@@ -116,22 +115,20 @@ out_neuron = genn_model.create_custom_neuron_class(
             "alpha_m",
             genn_model.create_dpf_class(lambda pars, dt: np.exp(-dt / pars[2]))(),
         ),
-        (
-            "alpha_r",
-            genn_model.create_dpf_class(lambda pars, dt: np.exp(-dt / pars[3]))(),
-        ),
     ],
-    var_name_types=[("r_right", "scalar"), ("r_left", "scalar"), ("V", "scalar")],
+    var_name_types=[("r_right", "scalar"), ("r_left", "scalar"), ("V", "scalar"), ("V_linear", "scalar")],
     sim_code="""
-    $(r_left) = $(alpha_r) * $(r_left) + (1.0-$(alpha_r)) * $(Isyn_v_proj_left) * $(output_scale);
-    $(r_right) = $(alpha_r) * $(r_right) +  (1.0-$(alpha_r)) * $(Isyn_v_proj_right) * $(output_scale);
+    $(r_left) = $(Isyn_v_proj_left);
+    $(r_right) = $(Isyn_v_proj_right); 
 
-    const scalar filt_l = 1.0 / (1.0 + exp(-($(r_left) - $(filt_bias)) / $(filt_scale)));
-    const scalar filt_r = 1.0 / (1.0 + exp(-($(r_right) - $(filt_bias)) / $(filt_scale)));
 
-    const scalar r_filt = min($(r_left), $(r_right)) * filt_l * filt_r;
+    const scalar filt_l = 1.0 / (1.0 + exp(-($(r_left) * $(filt_scale) - $(filt_bias))));
+    const scalar filt_r = 1.0 / (1.0 + exp(-($(r_right) * $(filt_scale) - $(filt_bias))));
+
+    const scalar r_filt = $(output_scale) * min($(r_left), $(r_right)) * filt_l * filt_r;
     
     $(V) = $(alpha_m) * $(V) + (1.0 - $(alpha_m)) * r_filt;
+    $(V_linear) = $(alpha_m) * $(V_linear) + (1.0 - $(alpha_m)) * ($(r_left) + $(r_right));
     """,
     additional_input_vars=[
         ("Isyn_v_proj_left", "scalar", 0.0),

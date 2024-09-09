@@ -23,8 +23,8 @@ params = {
     "REC_SPIKES": ["P", "S", "OUT"],
     "INPUT_WIDTH": 640,  # 304,
     "INPUT_HEIGHT": 480,  # 240,
-    "N_SUBDIV_X": 1,
-    "N_SUBDIV_Y": 1,
+    "N_SUBDIV_X": 2,
+    "N_SUBDIV_Y": 2,
     "HALF_STEP_TILES": True,
     "SPK_REC_STEPS": 100,
     #
@@ -32,14 +32,13 @@ params = {
     "X_KERNEL": kernel_x,
     "Y_KERNEL": kernel_y,
     #
-    "V_REG_S": 10.0,
+    "V_REG_S": 0.1,
     #
     "SIGM_POS_WEIGHTS_X": 0.25,
     "SIGM_POS_WEIGHTS_Y": 0.25,
     #
-    "OUTPUT_SCALE": 10.0,
+    "OUTPUT_SCALE": 1.8,
     "TAU_MEM_OUT": 50.0,
-    "TAU_R_OUT": 20.0,
     "FILT_SCALE_OUT": 0.5,
-    "FILT_BIAS_OUT": -0.5,
+    "FILT_BIAS_OUT": -1.0,
 }

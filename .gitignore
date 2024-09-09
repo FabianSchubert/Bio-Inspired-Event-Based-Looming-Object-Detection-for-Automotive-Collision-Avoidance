@@ -1,3 +1,8 @@
+# ignore pdfs
+*.pdf
+# ignore images
+*.png
+
 # ignore these annyoing blender cache files
 *.blend1
 

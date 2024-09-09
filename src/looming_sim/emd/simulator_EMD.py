@@ -86,12 +86,12 @@ class EMD_model(Base_model):
         self.S_OUT_left_weights = np.zeros((self.S_height, self.S_width))
         self.S_OUT_left_weights[:, : self.S_width // 2] = 1.0
         self.S_OUT_left_weights *= pos_weights
-        self.S_OUT_left_weights /= np.sum(self.S_OUT_left_weights)
+        #self.S_OUT_left_weights /= np.sum(self.S_OUT_left_weights)
 
         self.S_OUT_right_weights = np.zeros((self.S_height, self.S_width))
         self.S_OUT_right_weights[:, self.S_width // 2 :] = 1.0
         self.S_OUT_right_weights *= pos_weights
-        self.S_OUT_right_weights /= np.sum(self.S_OUT_right_weights)
+        #self.S_OUT_right_weights /= np.sum(self.S_OUT_right_weights)
 
         self.S_OUT_left_inivars = {"g": self.S_OUT_left_weights.flatten()}
         self.S_OUT_right_inivars = {"g": self.S_OUT_right_weights.flatten()}
@@ -106,7 +106,7 @@ class EMD_model(Base_model):
         self.OUT_params = {
             "output_scale": p["OUTPUT_SCALE"],
             "tau_m": p["TAU_MEM_OUT"],
-            "tau_r": p["TAU_R_OUT"],
+            #"tau_r": p["TAU_R_OUT"],
             "filt_scale": p["FILT_SCALE_OUT"],
             "filt_bias": p["FILT_BIAS_OUT"],
         }
@@ -490,7 +490,7 @@ def run_EMD_sim(
     measure_sim_speed=False,
     rec_neurons=[],
 ):
-    rec_neurons = list(set([("OUT", "V"), ("OUT", "r_left"), ("OUT", "r_right")]) | set(rec_neurons))
+    rec_neurons = list(set([("OUT", "V"), ("OUT", "V_linear"), ("OUT", "r_left"), ("OUT", "r_right")]) | set(rec_neurons))
 
     print("Running EMD simulation")
     p["REC_SPIKES"] = ["P", "S", "OUT"]
@@ -529,6 +529,7 @@ def run_EMD_sim(
     if not measure_sim_speed:
         #v_s = []
         v_out = []
+        v_out_linear = []
         r_left_out = []
         r_right_out = []
         sp_p = []
@@ -537,6 +538,7 @@ def run_EMD_sim(
         for i in range(network.n_tiles_y):
             #v_s.append([])
             v_out.append([])
+            v_out_linear.append([])
             r_left_out.append([])
             r_right_out.append([])
             sp_p.append([])
@@ -550,6 +552,7 @@ def run_EMD_sim(
                 #    )
                 #)
                 v_out[-1].append(rec_vars_n[f"VOUT_{i}_{j}"].flatten())
+                v_out_linear[-1].append(rec_vars_n[f"V_linearOUT_{i}_{j}"].flatten())
                 r_left_out[-1].append(rec_vars_n[f"r_leftOUT_{i}_{j}"].flatten())
                 r_right_out[-1].append(rec_vars_n[f"r_rightOUT_{i}_{j}"].flatten())
 
@@ -594,6 +597,7 @@ def run_EMD_sim(
             os.path.join(save_fold, results_filename),
             #v_s=v_s,
             v_out=v_out,
+            v_out_linear=v_out_linear,
             r_left_out=r_left_out,
             r_right_out=r_right_out,
             rec_n_t=rec_n_t,

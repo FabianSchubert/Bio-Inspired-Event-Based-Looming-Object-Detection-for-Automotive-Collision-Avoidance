@@ -1,5 +1,7 @@
 import os
 
+import numpy as np
+
 from src.looming_sim.lgmd.simulator_LGMD import run_LGMD_sim
 from src.looming_sim.emd.simulator_EMD import run_EMD_sim
 
@@ -32,8 +34,19 @@ params = {"LGMD": params_lgmd, "EMD": params_emd}
 n_subdiv = [2]
 
 examples = os.listdir(base_fold_input_data)
+examples.sort(key=lambda x: int(x.split("_")[1]))
 
-for ex in examples:
+indices = np.load(os.path.join(base_fold_results, "../idxs.npy"))
+
+n_samples = indices.shape[0]
+
+n_train = int(0.25 * n_samples)
+n_val = int(0.25 * n_samples)
+n_test = n_samples - n_train - n_val
+
+test_idxs = indices[n_train + n_val :]
+
+for ex in [examples[i] for i in test_idxs]:
     evt_file = os.path.join(base_fold_input_data, ex, "events.npy")
     for sim_name, sim in run_sim.items():
         for n_subd in n_subdiv:

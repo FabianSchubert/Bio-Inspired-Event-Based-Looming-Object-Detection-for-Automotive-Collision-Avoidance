@@ -66,7 +66,8 @@ def exit_sim():
 
     world.apply_settings(_settings)
 
-    pygame.quit()
+    if USE_PYGAME:
+        pygame.quit()
 
 
 class CollTiming:
@@ -103,6 +104,10 @@ class CollTiming:
         self.await_finish = True
 
 
+###### PYGAME ########################
+
+USE_PYGAME = True
+
 ###### SIM SETTINGS ########################
 DT = 0.01
 DT_MS = int(DT * 1000)
@@ -119,20 +124,25 @@ DVS_REFR_TIME_NS = 0.001e9
 DVS_THRESHOLD = 0.2
 DVS_LOG_EPS = 1e-1
 
-TARGET_SPEED_COLL_MPS = 30.0 / 3.6
+TARGET_SPEED_COLL_MPS = 10.0 / 3.6
 
-SPAWN_DIST_CAR = 20.0
-SPAWN_DIST_PED = 20.0
+TIME_TO_COLL = 2.5
+SPAWN_DIST_CAR = TARGET_SPEED_COLL_MPS * TIME_TO_COLL  # 20.0
+SPAWN_DIST_PED = TARGET_SPEED_COLL_MPS * TIME_TO_COLL  # 20.0
 
-R_RANDOM_OFFSET_MAX_CAR = 1.5
-R_RANDOM_OFFSET_MAX_PED = 1.0
+R_RANDOM_OFFSET_MAX_CAR = 0.5
+R_RANDOM_OFFSET_MAX_PED = 0.0
 
 T_WAIT = 3.0
 T_MAX_SHOW = 4.0
 T_CUTOFF_START = 0.05
+
+MOVE_VEHICLES = False
 ##############################
 
 ##### DATA RECORDING SETTINGS ####
+SAVE_EXAMPLES = True
+
 base_fold = os.path.join(
     os.path.dirname(__file__), "../../../data/carla_sim/random_spawn/"
 )
@@ -209,12 +219,13 @@ event_queue = queue.Queue()
 camera_event.listen(event_queue.put)
 ############
 
-## start pygame ##
-pygame.init()
+if USE_PYGAME:
+    ## start pygame ##
+    pygame.init()
 
-display = pygame.display.set_mode(
-    (WIDTH_RGB, HEIGHT_RGB), pygame.HWSURFACE | pygame.DOUBLEBUF
-)
+    display = pygame.display.set_mode(
+        (WIDTH_RGB, HEIGHT_RGB), pygame.HWSURFACE | pygame.DOUBLEBUF
+    )
 ###
 
 ground_fixed = False
@@ -226,7 +237,11 @@ traffic_manager.ignore_signs_percentage(vehicle, 100)
 traffic_manager.ignore_vehicles_percentage(vehicle, 100)
 traffic_manager.ignore_walkers_percentage(vehicle, 100)
 traffic_manager.distance_to_leading_vehicle(vehicle, 0.0)
-traffic_manager.vehicle_percentage_speed_difference(vehicle, (30.0 - TARGET_SPEED_COLL_MPS * 3.6) / 30.0)
+traffic_manager.vehicle_percentage_speed_difference(
+    vehicle,
+    (1.0 - TARGET_SPEED_COLL_MPS * 3.6 / 30.0)
+    * 100.0,  # calculate the percentage difference between the speed limit (I think it is 30 km/h) and the target speed
+)
 if not os.path.exists(base_fold):
     os.makedirs(base_fold)
 files_in_fold = os.listdir(base_fold)
@@ -235,8 +250,7 @@ index_example = len(files_in_fold)
 while True:
     timer.step()
 
-    if should_quit(pygame.event.get()):
-        exit_sim()
+    if USE_PYGAME and should_quit(pygame.event.get()):
         break
 
     world.tick()
@@ -259,16 +273,18 @@ while True:
         )
 
     events_binned = downsample_events(events, WIDTH, HEIGHT)
-    draw_image(
-        display,
-        pol_evt_img_to_rgb(events_binned.reshape((HEIGHT, WIDTH))),
-        scale=(WIDTH_RGB, HEIGHT_RGB),
-    )
+    if USE_PYGAME:
+        draw_image(
+            display,
+            pol_evt_img_to_rgb(events_binned.reshape((HEIGHT, WIDTH))),
+            scale=(WIDTH_RGB, HEIGHT_RGB),
+        )
 
     # get vehicle speed
     print(f"{vehicle.get_velocity().length() * 3.6:.2f} km/h", end="\r")
 
-    pygame.display.flip()
+    if USE_PYGAME:
+        pygame.display.flip()
 
     if not timer.record and (timer.t - timer.t1) > T_WAIT:
         agent = None
@@ -286,7 +302,8 @@ while True:
         # spawn_type = "pedestrians"
         # spawn_type = "cars"
         spawn_type = np.random.choice(["cars", "pedestrians", "none"])
-        # spawn_type = np.random.choice(["Pedestrian"])
+        # spawn_type = np.random.choice(["pedestrians"])
+        # spawn_type = np.random.choice(["cars"])
         # spawn_type = np.random.choice(["None"])
 
         print(f"now showing {spawn_type}")
@@ -385,9 +402,9 @@ while True:
                 agent.bounding_box.extent.z - agent.bounding_box.location.z + 0.05
             )
             agent.set_location(agent_loc)
-            if spawn_type == "cars":
+            if spawn_type == "cars" and MOVE_VEHICLES: # make the car drive
                 agent.set_autopilot(True)
-            else:
+            elif spawn_type == "pedestrians":
                 # make the walker walk
                 agent.apply_control(carla.WalkerControl(speed=1.0))
 
@@ -400,19 +417,27 @@ while True:
 
     if timer.record:
         if (spawn_type != "none") and ground_fixed:
-            #vehicle_control = carla.VehicleAckermannControl(
+            # vehicle_control = carla.VehicleAckermannControl(
             #    steer=calc_steering_angle(agent.get_transform().location, vehicle, prop_gain=0.2),
             #    steer_speed=0.0,
             #    speed=10.,#const_speed,
-            #)
+            # )
             vehicle_control = carla.VehicleControl(
-                steer=calc_steering_angle(agent.get_transform().location, vehicle, prop_gain=0.05),
-                throttle=0.75 if vehicle.get_velocity().length() < TARGET_SPEED_COLL_MPS else 0.0,
-                brake=0.5 if vehicle.get_velocity().length() > TARGET_SPEED_COLL_MPS else 0.0,
+                steer=calc_steering_angle(
+                    agent.get_transform().location, vehicle, prop_gain=0.05
+                ),
+                throttle=1.0
+                if vehicle.get_velocity().length() < TARGET_SPEED_COLL_MPS
+                else 0.0,
+                brake=0.2
+                if vehicle.get_velocity().length() > TARGET_SPEED_COLL_MPS
+                else 0.0,
             )
+            #print(vehicle.get_velocity().length() < TARGET_SPEED_COLL_MPS)
+            #print(vehicle_control.throttle)
             vehicle.apply_control(vehicle_control)
-            #vehicle.apply_ackermann_control(vehicle_control)
-            #print(const_speed)
+            # vehicle.apply_ackermann_control(vehicle_control)
+            # print(const_speed)
 
             # vehicle_control = vehicle.get_control()
 
@@ -420,7 +445,7 @@ while True:
             # vehicle_control.brake = 0.0
             # vehicle_control.hand_brake = False
             # vehicle_control.speed = const_speed
-            # 
+            #
 
             # traffic_manager.set_path(vehicle, [vehicle.get_location(), agent.get_location()])
 
@@ -492,7 +517,7 @@ while True:
             coll_type = spawn_type
             avg_dim = np.mean(average_diameter_obstacle)
 
-        if _save:
+        if SAVE_EXAMPLES and _save:
             avg_vel = np.mean(vehicle_velocities)
 
             save_fold = os.path.join(
@@ -524,3 +549,5 @@ while True:
 
         if agent is not None:
             agent.destroy()
+
+exit_sim()
