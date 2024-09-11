@@ -302,6 +302,7 @@ while True:
         # spawn_type = "pedestrians"
         # spawn_type = "cars"
         spawn_type = np.random.choice(["cars", "pedestrians", "none"])
+        # add spawn type?
         # spawn_type = np.random.choice(["pedestrians"])
         # spawn_type = np.random.choice(["cars"])
         # spawn_type = np.random.choice(["None"])

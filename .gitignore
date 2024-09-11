@@ -1,3 +1,6 @@
+# ignore pytorch files
+*.pt
+
 # ignore pdfs
 *.pdf
 # ignore images
