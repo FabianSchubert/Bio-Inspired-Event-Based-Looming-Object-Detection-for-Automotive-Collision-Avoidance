@@ -483,7 +483,7 @@ while True:
             dtype=EVENTS_DTYPE,
         )
 
-        # filter out events before t0
+        # filter out events before t0 + T_CUTOFF_START
         event_rec = event_rec[event_rec["t"] > ((timer.t0 + T_CUTOFF_START) * 1000)]
 
         # shift the earliest remaining event to t=0

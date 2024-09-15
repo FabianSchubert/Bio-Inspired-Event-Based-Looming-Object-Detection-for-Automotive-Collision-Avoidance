@@ -2,15 +2,30 @@ import pdb
 import carla
 import numpy as np
 import pygame
-import queue
 
-from src.carla_synth.utils import convert_events, downsample_events, pol_evt_img_to_rgb
+import os
+
+from src.carla_synth.utils import (
+    convert_events,
+    downsample_events,
+    pol_evt_img_to_rgb,
+    calc_projected_box_extent,
+)
+
+from src.config import EVENTS_DTYPE
+
+from itertools import cycle
 
 
 class ScenarioManager:
-
-    def __init__(self, world, target_vel_vehicle_kmh=20., target_vel_walker_kmh=5.0, dt=0.01, waittime=3.0):
-
+    def __init__(
+        self,
+        world,
+        target_vel_vehicle_kmh=20.0,
+        target_vel_walker_kmh=5.0,
+        dt=0.01,
+        waittime=3.0,
+    ):
         self.world = world
 
         self.mp = self.world.get_map()
@@ -19,7 +34,9 @@ class ScenarioManager:
         self.sptf = self.mp.get_spawn_points()
 
         ###### hand picked spawn points plus offsets #####
-        self.spawn_ids = [0,2,3,11]
+        self.spawn_ids = [0, 2, 3, 11]
+
+        # self.spawn_cycle = cycle(self.spawn_ids)
 
         self.offsets_fwd = {
             0: 5.0,
@@ -36,8 +53,12 @@ class ScenarioManager:
         }
 
         for idx in self.spawn_ids:
-            self.sptf[idx].location += self.sptf[idx].get_forward_vector() * self.offsets_fwd[idx]
-            self.sptf[idx].location += self.sptf[idx].get_right_vector() * self.offsets_right[idx]
+            self.sptf[idx].location += (
+                self.sptf[idx].get_forward_vector() * self.offsets_fwd[idx]
+            )
+            self.sptf[idx].location += (
+                self.sptf[idx].get_right_vector() * self.offsets_right[idx]
+            )
 
         ######
 
@@ -55,11 +76,7 @@ class ScenarioManager:
         self.start_signal_sent = False
 
     def spawn_ego(self, spawn_tf):
-        self.ego = self.world.spawn_actor(
-            self.bpl.find("vehicle.audi.a2"),
-            spawn_tf
-        )
-
+        self.ego = self.world.spawn_actor(self.bpl.find("vehicle.audi.a2"), spawn_tf)
 
     def destroy_ego(self):
         self.ego.destroy()
@@ -69,31 +86,20 @@ class ScenarioManager:
             self.cross_agent.destroy()
             self.cross_agent = None
 
-    def create_scenario(self, go_right=True):
-
+    def create_scenario(self, go_right=None, spawn_id=None):
         self.t = 0.0
 
         self.start_signal_sent = False
 
-        spawn_id = np.random.choice(self.spawn_ids)
+        if spawn_id is None:
+            spawn_id = np.random.choice(self.spawn_ids)
+
+        if go_right is None:
+            go_right = np.random.choice([True, False])
 
         self.spawn_tf_ego = self.sptf[spawn_id]
 
-        # shift the position to the ground.
-        #new_ego_tf.location.z = (
-        #        self.ego.bounding_box.extent.z - self.ego.bounding_box.location.z + 0.005
-        #)
-
-        #self.spawn_tf_ego = new_ego_tf
-
         self.ego.set_transform(self.spawn_tf_ego)
-
-
-        #_ego_loc = self.ego.get_location()
-        #_ego_loc.z = self.ego.bounding_box.extent.z - self.ego.bounding_box.location.z + 0.05
-
-        #self.ego.set_location(carla.Location(_ego_loc))
-
 
         self.destroy_cross_agent()
 
@@ -106,43 +112,44 @@ class ScenarioManager:
 
         self.dir = go_right * 2 - 1
 
-        spawn_pos = (self.spawn_tf_ego.location + self.spawn_tf_ego.get_forward_vector() * dist_fwd
-                     - self.spawn_tf_ego.get_right_vector() * self.dist_horiz * self.dir)
+        spawn_pos = (
+            self.spawn_tf_ego.location
+            + self.spawn_tf_ego.get_forward_vector() * dist_fwd
+            - self.spawn_tf_ego.get_right_vector() * self.dist_horiz * self.dir
+        )
 
-        spawn_rot = carla.Rotation(self.spawn_tf_ego.rotation.pitch,
-                                   self.spawn_tf_ego.rotation.yaw, self.spawn_tf_ego.rotation.roll)
+        spawn_rot = carla.Rotation(
+            self.spawn_tf_ego.rotation.pitch,
+            self.spawn_tf_ego.rotation.yaw,
+            self.spawn_tf_ego.rotation.roll,
+        )
 
-        spawn_rot.yaw += 90. * self.dir
+        spawn_rot.yaw += 90.0 * self.dir
 
         spawn_tf = carla.Transform(location=spawn_pos, rotation=spawn_rot)
 
-        
-
-        bp_veh_crossing = np.random.choice(blueprint_library.filter(f"{self.cross_type}.*"))
+        bp_veh_crossing = np.random.choice(
+            blueprint_library.filter(f"{self.cross_type}.*")
+        )
         print(bp_veh_crossing)
 
         try:
-
-            self.cross_agent = world.spawn_actor(
-                bp_veh_crossing,
-                spawn_tf
-            )
+            self.cross_agent = world.spawn_actor(bp_veh_crossing, spawn_tf)
             print("spawned\n==================================")
 
         except Exception as e:
             print(e)
             self.cross_agent = None
             print("not spawned")
-            self.create_scenario(go_right=np.random.choice([True, False]))
+            self.create_scenario()
 
     def update(self):
-
         self.t += self.dt
 
         if self.t >= self.waittime:
-
             if not self.start_signal_sent:
-                self.recorder.start()
+                self.event_recorder.start()
+                self.metadata_recorder.start("none_with_crossing")
                 self.start_signal_sent = True
 
             if self.cross_type == "vehicle":
@@ -152,18 +159,21 @@ class ScenarioManager:
 
                 # check if the vehicle has crossed the threshold opposite to where it started
 
+            self.metadata_recorder.fetch_data()
+
             self.check_threshold()
 
     def update_vehicle_control(self):
         if self.cross_agent is not None:
-            thr = np.maximum(0.0, 15.0 * (self.target_vel_vehicle -
-                                          self.cross_agent.get_velocity().length()) / self.target_vel_vehicle)
-
-            vehicle_control = carla.VehicleControl(
-                throttle=thr,
-                brake=0.0
+            thr = np.maximum(
+                0.0,
+                15.0
+                * (self.target_vel_vehicle - self.cross_agent.get_velocity().length())
+                / self.target_vel_vehicle,
             )
-            #print(vehicle.get_velocity().length() < TARGET_SPEED_COLL_MPS)
+
+            vehicle_control = carla.VehicleControl(throttle=thr, brake=0.0)
+            # print(vehicle.get_velocity().length() < TARGET_SPEED_COLL_MPS)
             # print(vehicle_control.throttle)
             self.cross_agent.apply_control(vehicle_control)
 
@@ -171,30 +181,37 @@ class ScenarioManager:
         if self.cross_agent is not None:
             walker_control = carla.WalkerControl(
                 direction=self.ego.get_transform().get_right_vector() * self.dir,
-                speed=self.target_vel_walker
+                speed=self.target_vel_walker,
             )
 
             self.cross_agent.apply_control(walker_control)
 
     def check_threshold(self):
         if self.cross_agent is not None:
-            diff = self.cross_agent.get_transform().location - self.ego.get_transform().location
+            diff = (
+                self.cross_agent.get_transform().location
+                - self.ego.get_transform().location
+            )
 
             proj = self.ego.get_transform().get_right_vector().dot(diff)
 
-            if (self.dir == 1 and proj > self.th_horiz) or (self.dir == -1 and proj < -self.th_horiz):
-                self.recorder.stop()
+            if (self.dir == 1 and proj > self.th_horiz) or (
+                self.dir == -1 and proj < -self.th_horiz
+            ):
+                self.event_recorder.stop()
+                self.metadata_recorder.stop()
                 self.destroy_cross_agent()
-                self.create_scenario(go_right=np.random.choice([True, False]))
+                self.create_scenario()
 
-    def set_recorder(self, recorder):
-        self.recorder = recorder
+    def set_event_recorder(self, recorder):
+        self.event_recorder = recorder
+
+    def set_metadata_recorder(self, recorder):
+        self.metadata_recorder = recorder
 
 
 class CameraManager:
-
     def __init__(self, width, height, world, car, sensortype="rgb"):
-
         self.width = width
         self.height = height
 
@@ -206,12 +223,11 @@ class CameraManager:
 
         assert sensortype in ["rgb", "dvs"]
 
-        if sensortype=="rgb":
-            cam_bp = self.bpl.find('sensor.camera.rgb')
-            
-        else:
-            cam_bp = self.bpl.find('sensor.camera.dvs')
+        if sensortype == "rgb":
+            cam_bp = self.bpl.find("sensor.camera.rgb")
 
+        else:
+            cam_bp = self.bpl.find("sensor.camera.dvs")
 
         self.event_data = None
 
@@ -221,16 +237,13 @@ class CameraManager:
         pos_cam = carla.Location(x=2.5, y=0.0, z=1.0)
         rot_cam = carla.Rotation(pitch=0.0, yaw=0.0, roll=0.0)
 
-
         self.camera = self.world.spawn_actor(
-            cam_bp,
-            carla.Transform(pos_cam, rot_cam),
-            attach_to=car
-            )
+            cam_bp, carla.Transform(pos_cam, rot_cam), attach_to=car
+        )
 
         self.rgb_arr = np.zeros((height, width, 3), dtype=np.uint8)
 
-        self.surface = pygame.surfarray.make_surface(self.rgb_arr.swapaxes(0,1))
+        self.surface = pygame.surfarray.make_surface(self.rgb_arr.swapaxes(0, 1))
 
         if sensortype == "rgb":
             self.camera.listen(self.udpate_callback_rgb)
@@ -240,25 +253,25 @@ class CameraManager:
         self.recorder = None
 
     def udpate_callback_rgb(self, data):
-
         img = np.reshape(np.copy(data.raw_data), (self.height, self.width, 4))
-        img = img[:,:,:3]
+        img = img[:, :, :3]
         img = img[:, :, ::-1]
         self.rgb_arr[:] = img
-        self.surface = pygame.surfarray.make_surface(self.rgb_arr.swapaxes(0,1))
+        self.surface = pygame.surfarray.make_surface(self.rgb_arr.swapaxes(0, 1))
 
         if self.recorder is not None:
             self.recorder.receive_data(data)
 
     def udpate_callback_dvs(self, data):
-
         evt_arr = convert_events(data)
         events_binned = downsample_events(evt_arr, self.width, self.height)
 
-        self.rgb_arr[:] = pol_evt_img_to_rgb(events_binned.reshape((self.height, self.width)))
+        self.rgb_arr[:] = pol_evt_img_to_rgb(
+            events_binned.reshape((self.height, self.width))
+        )
 
-        self.surface = pygame.surfarray.make_surface(self.rgb_arr.swapaxes(0,1))
-        
+        self.surface = pygame.surfarray.make_surface(self.rgb_arr.swapaxes(0, 1))
+
         if self.recorder is not None:
             self.recorder.receive_data(events_binned)
 
@@ -268,23 +281,9 @@ class CameraManager:
     def set_recorder(self, recorder):
         self.recorder = recorder
 
+
 class EventRecorder:
-
-    def __init__(self, dt, save_fold):
-        '''
-        self.events = np.array(
-            [],
-            dtype=np.dtype(
-                [
-                    ("x", np.uint16),
-                    ("y", np.uint16),
-                    ("t", np.int64),
-                    ("p", bool),
-                ]
-            ),
-        )
-        '''
-
+    def __init__(self, dt, save_fold, save_data=True):
         self.event_rec_x = np.array([], dtype="<u2")
         self.event_rec_y = np.array([], dtype="<u2")
         self.event_rec_p = np.array([], dtype="<u2")
@@ -294,6 +293,10 @@ class EventRecorder:
 
         self.dt = dt
         self.t = 0.0
+
+        self.save_mod = SaveModule(save_fold, "events")
+
+        self.save_data = save_data
 
     def start(self):
         if not self.recording:
@@ -305,20 +308,36 @@ class EventRecorder:
             self.event_rec_p = np.array([], dtype="<u2")
             self.event_rec_t = np.array([], dtype="<u4")
 
-            print('start recording')
+            print("start recording")
         else:
-            print('already recording! (you need to stop the recording first to restart)')
+            print(
+                "already recording! (you need to stop the recording first to restart)"
+            )
 
     def stop(self):
         if self.recording:
             self.recording = False
-            print('stop recording')
+            print("stop recording")
+            if self.save_data:
+                print("saving events...")
+                event_rec = np.array(
+                    list(
+                        zip(
+                            self.event_rec_t,
+                            self.event_rec_x,
+                            self.event_rec_y,
+                            self.event_rec_p,
+                        )
+                    ),
+                    dtype=EVENTS_DTYPE,
+                )
+
+                self.save_mod.save_npy(event_rec)
         else:
-            print('already stopped recording!')
+            print("already stopped recording!")
 
     def receive_data(self, data):
         if self.recording:
-
             self.t += self.dt
 
             evts_idx = np.where(data != 0)[0]
@@ -333,6 +352,139 @@ class EventRecorder:
                 self.event_rec_p = np.concatenate((self.event_rec_p, pol))
                 self.event_rec_t = np.concatenate((self.event_rec_t, st))
 
+
+class MetaDataRecorder:
+    def __init__(
+        self, dt, save_fold, manager, camera, save_data=True
+    ):
+        self.ego_velocities = []
+        self.av_diam_cross_vehicle = []
+        self.coll_type = None
+
+        self.sc_manager = manager
+        self.camera = camera
+
+        self.recording = False
+
+        self.save_mod = SaveModule(save_fold, "sim_data")
+
+        self.save_data = save_data
+
+        self.dt = dt
+        self.t = 0.0
+
+    def start(self, coll_type):
+        if not self.recording:
+            self.ego_velocities = []
+            self.av_diam_cross_vehicle = []
+
+            self.coll_type = coll_type
+
+            self.recording = True
+
+            self.t = 0.0
+
+            print("start recording metadata")
+        else:
+            print(
+                "already recording metadata! (you need to stop the recording first to restart)"
+            )
+
+    def stop(self):
+        if self.recording:
+            self.recording = False
+            print("stop recording metadata")
+            if self.save_data:
+                print("saving metadata...")
+
+                avg_dim = np.mean(self.av_diam_cross_vehicle)
+                avg_vel = np.mean(self.ego_velocities)
+
+                self.save_mod.save_npz(
+                    {
+                        "coll_type": self.coll_type,
+                        "t_end": self.t * 1000,
+                        "dt": self.dt * 1000,
+                        "vel": avg_vel,
+                        "diameter_object": avg_dim,
+                    }
+                )
+        else:
+            print("already stopped recording metadata!")
+
+    def fetch_data(self):
+        if self.recording:
+            self.t += self.dt
+
+            if self.sc_manager.ego is not None and self.sc_manager.ego.is_alive:
+                self.ego_velocities.append(self.sc_manager.ego.get_velocity().length())
+            else:
+                print("warning: ego vehicle not set or destroyed")
+                self.ego_velocities.append(np.nan)
+
+            if (
+                self.sc_manager.cross_agent is not None
+                and self.sc_manager.cross_agent.is_alive
+                and self.camera is not None
+                and self.camera.is_alive
+            ):
+                inv_cm_mat = self.camera.get_transform().get_inverse_matrix()
+                cross_vehicle_box_verts = (
+                    self.sc_manager.cross_agent.bounding_box.get_world_vertices(
+                        self.sc_manager.cross_agent.get_transform()
+                    )
+                )
+
+                box_dims = calc_projected_box_extent(inv_cm_mat, cross_vehicle_box_verts)
+                # append geometric mean of the box dimensions
+                self.av_diam_cross_vehicle.append(np.sqrt(box_dims[0] * box_dims[1]))
+            else:
+                print("warning: cross agent or camera not set or destroyed")
+                print(self.sc_manager.cross_agent, self.camera)
+                
+                self.av_diam_cross_vehicle.append(np.nan)
+
+
+class SaveModule:
+    def __init__(self, save_fold, filename):
+        self.save_fold = save_fold
+
+        self.filename = filename
+
+        if not os.path.exists(save_fold):
+            os.makedirs(save_fold)
+        files_in_fold = os.listdir(save_fold)
+        # get the index of the next example to prevent overwriting previous examples
+        self.index_example = len(files_in_fold)
+
+    def save_npy(self, data):
+        save_subfold = os.path.join(
+            self.save_fold,
+            f"example_{self.index_example}",
+        )
+        if not os.path.exists(save_subfold):
+            os.makedirs(save_subfold)
+
+        np.save(os.path.join(save_subfold, self.filename), data)
+        self.index_example += 1
+
+    def save_npz(self, data_dict):
+        save_subfold = os.path.join(
+            self.save_fold,
+            f"example_{self.index_example}",
+        )
+        if not os.path.exists(save_subfold):
+            os.makedirs(save_subfold)
+
+        np.savez(os.path.join(save_subfold, self.filename), **data_dict)
+        self.index_example += 1
+
+
+SAVE_EXAMPLES = True
+
+base_fold = os.path.join(
+    os.path.dirname(__file__), "../../../data/carla_sim/random_spawn/"
+)
 
 WIDTH, HEIGHT = 640, 480
 
@@ -373,31 +525,32 @@ cam_mg = CameraManager(WIDTH, HEIGHT, world, scenario_mng.ego)
 
 cam_dvs_mg = CameraManager(WIDTH, HEIGHT, world, scenario_mng.ego, sensortype="dvs")
 
-event_recorder = EventRecorder()
+event_recorder = EventRecorder(DT, "data_testfold")
+
+metadata_recorder = MetaDataRecorder(
+    DT, "data_testfold", scenario_mng, cam_mg.camera
+)
 
 cam_dvs_mg.set_recorder(event_recorder)
-scenario_mng.set_recorder(event_recorder)
+scenario_mng.set_event_recorder(event_recorder)
+scenario_mng.set_metadata_recorder(metadata_recorder)
 
 
 ############################
 
 pygame.init()
 
-display = pygame.display.set_mode(
-    (WIDTH, HEIGHT), pygame.HWSURFACE | pygame.DOUBLEBUF
-)
+display = pygame.display.set_mode((WIDTH, HEIGHT), pygame.HWSURFACE | pygame.DOUBLEBUF)
 
 running = True
 
 while running:
-
     for event in pygame.event.get():
         if event.type == pygame.QUIT:
             running = False
         elif event.type == pygame.KEYUP:
             if event.key == pygame.K_ESCAPE:
                 running = False
-
 
     display.blit(cam_dvs_mg.surface, (0, 0))
 
