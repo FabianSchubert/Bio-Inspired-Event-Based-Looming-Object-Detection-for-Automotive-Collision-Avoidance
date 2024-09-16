@@ -16,6 +16,8 @@ from src.config import EVENTS_DTYPE
 
 from itertools import cycle
 
+from .settings import base_fold_input_data
+
 
 class ScenarioManager:
     def __init__(
@@ -25,6 +27,7 @@ class ScenarioManager:
         target_vel_walker_kmh=5.0,
         dt=0.01,
         waittime=3.0,
+        max_reps=None,
     ):
         self.world = world
 
@@ -59,6 +62,11 @@ class ScenarioManager:
             self.sptf[idx].location += (
                 self.sptf[idx].get_right_vector() * self.offsets_right[idx]
             )
+        
+        self.max_reps = max_reps
+        self.n_scenarios = 0
+        
+        self.finished = False
 
         ######
 
@@ -136,7 +144,7 @@ class ScenarioManager:
         try:
             self.cross_agent = world.spawn_actor(bp_veh_crossing, spawn_tf)
             print("spawned\n==================================")
-
+            self.n_scenarios += 1
         except Exception as e:
             print(e)
             self.cross_agent = None
@@ -201,7 +209,10 @@ class ScenarioManager:
                 self.event_recorder.stop()
                 self.metadata_recorder.stop()
                 self.destroy_cross_agent()
-                self.create_scenario()
+                if self.max_reps is None or self.n_scenarios < self.max_reps:
+                    self.create_scenario()
+                else:
+                    self.finished=True
 
     def set_event_recorder(self, recorder):
         self.event_recorder = recorder
@@ -211,13 +222,15 @@ class ScenarioManager:
 
 
 class CameraManager:
-    def __init__(self, width, height, world, car, sensortype="rgb"):
+    def __init__(self, width, height, world, car, sensortype="rgb", using_pygame=True):
         self.width = width
         self.height = height
 
         self.world = world
 
         self.bpl = self.world.get_blueprint_library()
+
+        self.using_pygame = using_pygame
 
         self.sensortype = sensortype
 
@@ -253,11 +266,12 @@ class CameraManager:
         self.recorder = None
 
     def udpate_callback_rgb(self, data):
-        img = np.reshape(np.copy(data.raw_data), (self.height, self.width, 4))
-        img = img[:, :, :3]
-        img = img[:, :, ::-1]
-        self.rgb_arr[:] = img
-        self.surface = pygame.surfarray.make_surface(self.rgb_arr.swapaxes(0, 1))
+        if self.using_pygame:
+            img = np.reshape(np.copy(data.raw_data), (self.height, self.width, 4))
+            img = img[:, :, :3]
+            img = img[:, :, ::-1]
+            self.rgb_arr[:] = img
+            self.surface = pygame.surfarray.make_surface(self.rgb_arr.swapaxes(0, 1))
 
         if self.recorder is not None:
             self.recorder.receive_data(data)
@@ -265,12 +279,12 @@ class CameraManager:
     def udpate_callback_dvs(self, data):
         evt_arr = convert_events(data)
         events_binned = downsample_events(evt_arr, self.width, self.height)
+        if self.using_pygame:
+            self.rgb_arr[:] = pol_evt_img_to_rgb(
+                events_binned.reshape((self.height, self.width))
+            )
 
-        self.rgb_arr[:] = pol_evt_img_to_rgb(
-            events_binned.reshape((self.height, self.width))
-        )
-
-        self.surface = pygame.surfarray.make_surface(self.rgb_arr.swapaxes(0, 1))
+            self.surface = pygame.surfarray.make_surface(self.rgb_arr.swapaxes(0, 1))
 
         if self.recorder is not None:
             self.recorder.receive_data(events_binned)
@@ -354,9 +368,7 @@ class EventRecorder:
 
 
 class MetaDataRecorder:
-    def __init__(
-        self, dt, save_fold, manager, camera, save_data=True
-    ):
+    def __init__(self, dt, save_fold, manager, camera, save_data=True):
         self.ego_velocities = []
         self.av_diam_cross_vehicle = []
         self.coll_type = None
@@ -435,13 +447,15 @@ class MetaDataRecorder:
                     )
                 )
 
-                box_dims = calc_projected_box_extent(inv_cm_mat, cross_vehicle_box_verts)
+                box_dims = calc_projected_box_extent(
+                    inv_cm_mat, cross_vehicle_box_verts
+                )
                 # append geometric mean of the box dimensions
                 self.av_diam_cross_vehicle.append(np.sqrt(box_dims[0] * box_dims[1]))
             else:
                 print("warning: cross agent or camera not set or destroyed")
                 print(self.sc_manager.cross_agent, self.camera)
-                
+
                 self.av_diam_cross_vehicle.append(np.nan)
 
 
@@ -482,9 +496,9 @@ class SaveModule:
 
 SAVE_EXAMPLES = True
 
-base_fold = os.path.join(
-    os.path.dirname(__file__), "../../../data/carla_sim/random_spawn/"
-)
+USE_PYGAME = False
+
+N_SAMPLES = 100
 
 WIDTH, HEIGHT = 640, 480
 
@@ -516,19 +530,21 @@ traffic_manager = client.get_trafficmanager()
 traffic_manager.set_synchronous_mode(True)
 
 
-scenario_mng = ScenarioManager(world, dt=DT)
+scenario_mng = ScenarioManager(world, dt=DT, max_reps=N_SAMPLES)
 
 
 scenario_mng.create_scenario()
 
-cam_mg = CameraManager(WIDTH, HEIGHT, world, scenario_mng.ego)
+# cam_mg = CameraManager(WIDTH, HEIGHT, world, scenario_mng.ego)
 
-cam_dvs_mg = CameraManager(WIDTH, HEIGHT, world, scenario_mng.ego, sensortype="dvs")
+cam_dvs_mg = CameraManager(
+    WIDTH, HEIGHT, world, scenario_mng.ego, sensortype="dvs", using_pygame=USE_PYGAME
+)
 
-event_recorder = EventRecorder(DT, "data_testfold")
+event_recorder = EventRecorder(DT, base_fold_input_data)
 
 metadata_recorder = MetaDataRecorder(
-    DT, "data_testfold", scenario_mng, cam_mg.camera
+    DT, base_fold_input_data, scenario_mng, cam_dvs_mg.camera
 )
 
 cam_dvs_mg.set_recorder(event_recorder)
@@ -537,37 +553,40 @@ scenario_mng.set_metadata_recorder(metadata_recorder)
 
 
 ############################
+if USE_PYGAME:
+    pygame.init()
 
-pygame.init()
-
-display = pygame.display.set_mode((WIDTH, HEIGHT), pygame.HWSURFACE | pygame.DOUBLEBUF)
+    display = pygame.display.set_mode((WIDTH, HEIGHT), pygame.HWSURFACE | pygame.DOUBLEBUF)
 
 running = True
 
 while running:
-    for event in pygame.event.get():
-        if event.type == pygame.QUIT:
-            running = False
-        elif event.type == pygame.KEYUP:
-            if event.key == pygame.K_ESCAPE:
+    if USE_PYGAME:
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
                 running = False
+            elif event.type == pygame.KEYUP:
+                if event.key == pygame.K_ESCAPE:
+                    running = False
 
-    display.blit(cam_dvs_mg.surface, (0, 0))
+        display.blit(cam_dvs_mg.surface, (0, 0))
 
-    pygame.display.flip()
+        pygame.display.flip()
 
     world.tick()
 
     scenario_mng.update()
 
+    running = not scenario_mng.finished
 
-pygame.quit()
+if USE_PYGAME:
+    pygame.quit()
 
 scenario_mng.destroy_ego()
 scenario_mng.destroy_cross_agent()
 
 
-cam_mg.destroy()
+# cam_mg.destroy()
 cam_dvs_mg.destroy()
 
 world.apply_settings(_settings)
