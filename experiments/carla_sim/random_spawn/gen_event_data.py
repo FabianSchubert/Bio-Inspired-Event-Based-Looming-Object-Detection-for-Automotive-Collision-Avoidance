@@ -124,9 +124,12 @@ DVS_REFR_TIME_NS = 0.001e9
 DVS_THRESHOLD = 0.2
 DVS_LOG_EPS = 1e-1
 
+TARGET_SPEED_COLL_MPS_MIN = 10.0 / 3.6
+TARGET_SPEED_COLL_MPS_MAX = 40.0 / 3.6
+
 TARGET_SPEED_COLL_MPS = 10.0 / 3.6
 
-TIME_TO_COLL = 2.5
+TIME_TO_COLL = 3.5
 SPAWN_DIST_CAR = TARGET_SPEED_COLL_MPS * TIME_TO_COLL  # 20.0
 SPAWN_DIST_PED = TARGET_SPEED_COLL_MPS * TIME_TO_COLL  # 20.0
 
@@ -237,11 +240,13 @@ traffic_manager.ignore_signs_percentage(vehicle, 100)
 traffic_manager.ignore_vehicles_percentage(vehicle, 100)
 traffic_manager.ignore_walkers_percentage(vehicle, 100)
 traffic_manager.distance_to_leading_vehicle(vehicle, 0.0)
-traffic_manager.vehicle_percentage_speed_difference(
-    vehicle,
-    (1.0 - TARGET_SPEED_COLL_MPS * 3.6 / 30.0)
-    * 100.0,  # calculate the percentage difference between the speed limit (I think it is 30 km/h) and the target speed
-)
+#traffic_manager.vehicle_percentage_speed_difference(
+#        vehicle,
+#    (1.0 - TARGET_SPEED_COLL_MPS * 3.6 / 30.0)
+#    * 100.0,  # calculate the percentage difference between the speed limit (I think it is 30 km/h) and the target speed
+#)
+
+
 if not os.path.exists(base_fold):
     os.makedirs(base_fold)
 files_in_fold = os.listdir(base_fold)
@@ -301,13 +306,16 @@ while True:
 
         # spawn_type = "pedestrians"
         # spawn_type = "cars"
-        spawn_type = np.random.choice(["cars", "pedestrians", "none"])
+        # spawn_type = np.random.choice(["cars", "pedestrians"])
         # add spawn type?
-        # spawn_type = np.random.choice(["pedestrians"])
+        spawn_type = np.random.choice(["pedestrians"])
         # spawn_type = np.random.choice(["cars"])
         # spawn_type = np.random.choice(["None"])
 
         print(f"now showing {spawn_type}")
+
+        
+
 
         # spawn vehicle
         if spawn_type == "cars":
@@ -397,6 +405,7 @@ while True:
         and (agent is not None)
         and (not ground_fixed)
     ):
+        agent.set_simulate_physics(False)
         agent_loc = agent.get_location()
         if agent_loc != carla.Location(x=0, y=0, z=0):
             agent_loc.z = (
@@ -541,6 +550,14 @@ while True:
             index_example += 1
 
         vehicle.set_autopilot(True)
+
+        TARGET_SPEED_COLL_MPS = np.random.uniform(
+            TARGET_SPEED_COLL_MPS_MIN, TARGET_SPEED_COLL_MPS_MAX
+        )
+        
+        traffic_manager.set_desired_speed(vehicle, TARGET_SPEED_COLL_MPS * 3.6)
+        SPAWN_DIST_CAR = TARGET_SPEED_COLL_MPS * TIME_TO_COLL
+        SPAWN_DIST_PED = TARGET_SPEED_COLL_MPS * TIME_TO_COLL
 
         del event_rec
         del event_rec_x

@@ -24,15 +24,17 @@ params = {"EMD": params_emd}
 n_subdiv = [2]
 
 # get the samples that were used in the optimisation process
-samples_pytorch_train = np.load(os.path.join(base_fold_results, "../samples.npz"))
+samples_pytorch = np.load(os.path.join(base_fold_results, "../samples.npz"))
 
 # exclude training and validation samples
-exclude_examples = list(samples_pytorch_train["train"]) + list(
-    samples_pytorch_train["val"]
-)
+#exclude_examples = list(samples_pytorch["train"]) + list(
+#    samples_pytorch["val"]
+#)
+
+examples = list(samples_pytorch["test"])
 
 # use all other samples.
-examples = [ex for ex in os.listdir(base_fold_input_data) if ex not in exclude_examples]
+#examples = [ex for ex in os.listdir(base_fold_input_data) if ex not in exclude_examples]
 
 
 for ex in examples:

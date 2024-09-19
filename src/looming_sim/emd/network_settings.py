@@ -37,8 +37,8 @@ params = {
     "SIGM_POS_WEIGHTS_X": 0.25,
     "SIGM_POS_WEIGHTS_Y": 0.25,
     #
-    "OUTPUT_SCALE": 1.6,
+    "OUTPUT_SCALE": 1.95,
     "TAU_MEM_OUT": 50.0,
-    "FILT_SCALE_OUT": 1.57,
-    "FILT_BIAS_OUT": -0.9,
+    "FILT_SCALE_OUT": 0.71,
+    "FILT_BIAS_OUT": -1.48,
 }
