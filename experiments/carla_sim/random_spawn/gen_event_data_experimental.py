@@ -1,28 +1,16 @@
-import pdb
 import carla
-import numpy as np
 import pygame
 
-import os
-
-from src.carla_synth.utils import (
-    convert_events,
-    downsample_events,
-    pol_evt_img_to_rgb,
-    calc_projected_box_extent,
-)
-
 from src.carla_synth.camera_manager import CameraManager
-from src.carla_synth.recorders import EventRecorder, MetaDataRecorder, SaveModule
+from src.carla_synth.recorders import EventRecorder, MetaDataRecorder
 
-from src.config import EVENTS_DTYPE
-
-from itertools import cycle
 
 from .settings import base_fold_input_data
 
-#from src.carla_synth.scenario_manager import CrossingScenarioManager as ScenarioManager
-from src.carla_synth.scenario_manager import NormalDrivingScenarioManager as ScenarioManager
+# from src.carla_synth.scenario_manager import CrossingScenarioManager as ScenarioManager
+from src.carla_synth.scenario_manager import (
+    NormalDrivingScenarioManager as ScenarioManager,
+)
 
 SAVE_EXAMPLES = True
 
@@ -71,7 +59,7 @@ scenario_mng = ScenarioManager(
     world, traffic_manager, dt=DT, max_reps=N_SAMPLES, n_vehicles=50, n_pedestrians=0
 )
 
-#scenario_mng = ScenarioManager(
+# scenario_mng = ScenarioManager(
 #    world, dt=DT, max_reps=N_SAMPLES)
 
 
