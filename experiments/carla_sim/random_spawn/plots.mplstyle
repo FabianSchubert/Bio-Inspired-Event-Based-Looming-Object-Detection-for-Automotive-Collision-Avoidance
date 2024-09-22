@@ -49,7 +49,7 @@ axes.linewidth: 0.6
 
 grid.color: white
 
-figure.dpi: 150
+figure.dpi: 250
 
 axes.prop_cycle: cycler('color', ['5A5B9F', 'D94F70', '009473', 'F0C05A', '7BC4C4', 'FF6F61'])
 image.cmap: RdPu
