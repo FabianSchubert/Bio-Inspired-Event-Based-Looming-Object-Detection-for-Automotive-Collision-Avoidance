@@ -6,6 +6,7 @@ axes.spines.top: False
 axes.spines.right: False
 
 font.size: 8
+font.sans-serif: Arial
 
 xtick.direction: in
 ytick.direction: in
