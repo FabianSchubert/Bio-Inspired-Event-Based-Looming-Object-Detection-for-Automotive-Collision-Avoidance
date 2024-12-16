@@ -4,7 +4,15 @@ import os
 
 from pygenn import genn_model
 from pygenn.genn_wrapper import NO_DELAY
-from .models_emd import p_neuron, n_neuron, s_neuron, out_neuron, cont_wu, sparse_one_to_one_snippet_with_pad, create_cont_wu
+from .models_emd import (
+    p_neuron,
+    n_neuron,
+    s_neuron,
+    out_neuron,
+    cont_wu,
+    sparse_one_to_one_snippet_with_pad,
+    create_cont_wu,
+)
 
 from .network_settings import params
 
@@ -26,7 +34,7 @@ class EMD_model(Base_model):
     def define_network(self, p):
         P_params = {}
         N_params = {}
-        
+
         _p_vars = [v.name for v in p_neuron.get_vars()]
         self.P_inivars = dict(zip(_p_vars, [0.0] * len(_p_vars)))
 
@@ -86,15 +94,21 @@ class EMD_model(Base_model):
         self.S_OUT_left_weights = np.zeros((self.S_height, self.S_width))
         self.S_OUT_left_weights[:, : self.S_width // 2] = 1.0
         self.S_OUT_left_weights *= pos_weights
-        #self.S_OUT_left_weights /= np.sum(self.S_OUT_left_weights)
+        # self.S_OUT_left_weights /= np.sum(self.S_OUT_left_weights)
 
         self.S_OUT_right_weights = np.zeros((self.S_height, self.S_width))
         self.S_OUT_right_weights[:, self.S_width // 2 :] = 1.0
         self.S_OUT_right_weights *= pos_weights
-        #self.S_OUT_right_weights /= np.sum(self.S_OUT_right_weights)
+        # self.S_OUT_right_weights /= np.sum(self.S_OUT_right_weights)
+
+        self.sum_x_right_weights = (self.S_OUT_right_weights * xs).sum()
+
+        self.S_OUT_avg_weights = pos_weights.copy()
+        self.S_OUT_avg_weights /= np.sum(self.S_OUT_avg_weights)
 
         self.S_OUT_left_inivars = {"g": self.S_OUT_left_weights.flatten()}
         self.S_OUT_right_inivars = {"g": self.S_OUT_right_weights.flatten()}
+        self.S_OUT_avg_inivars = {"g": self.S_OUT_avg_weights.flatten()}
 
         self.S_params = {
             "v_reg": p["V_REG_S"],
@@ -106,9 +120,10 @@ class EMD_model(Base_model):
         self.OUT_params = {
             "output_scale": p["OUTPUT_SCALE"],
             "tau_m": p["TAU_MEM_OUT"],
-            #"tau_r": p["TAU_R_OUT"],
+            # "tau_r": p["TAU_R_OUT"],
             "filt_scale": p["FILT_SCALE_OUT"],
             "filt_bias": p["FILT_BIAS_OUT"],
+            "sum_x_right_weights": self.sum_x_right_weights,
         }
 
         _out_vars = [v.name for v in out_neuron.get_vars()]
@@ -136,12 +151,14 @@ class EMD_model(Base_model):
         )
 
         self.PN_S_one_to_one_iniconn = genn_model.init_connectivity(
-            #"FixedProbability", {"prob": 0.01}
+            # "FixedProbability", {"prob": 0.01}
             sparse_one_to_one_snippet_with_pad,
-            {"pad_x": self.kernel_half_width,
-             "pad_y": self.kernel_half_height,
-             "width_pre": self.tile_width,
-             "height_pre": self.tile_height},
+            {
+                "pad_x": self.kernel_half_width,
+                "pad_y": self.kernel_half_height,
+                "width_pre": self.tile_width,
+                "height_pre": self.tile_height,
+            },
         )
 
         self.P = []
@@ -155,7 +172,7 @@ class EMD_model(Base_model):
         self.P_S_y = []
         self.P_S_norm = []
         self.P_S_one_to_one = []
-        
+
         self.N_S_x = []
         self.N_S_y = []
         self.N_S_norm = []
@@ -163,6 +180,7 @@ class EMD_model(Base_model):
 
         self.S_OUT_v_proj_left = []
         self.S_OUT_v_proj_right = []
+        self.S_OUT_v_avg_x = []
 
         for i in range(self.n_tiles_y):
             for j in range(self.n_tiles_x):
@@ -438,7 +456,6 @@ class EMD_model(Base_model):
 
                 self.N_S_one_to_one[-1].ps_target_var = "Isyn_n_one_to_one"
 
-
                 self.S_OUT_v_proj_left.append(
                     self.model.add_synapse_population(
                         f"S_OUT_v_proj_left_{i}_{j}",
@@ -479,6 +496,26 @@ class EMD_model(Base_model):
 
                 self.S_OUT_v_proj_right[-1].ps_target_var = "Isyn_v_proj_right"
 
+                self.S_OUT_v_avg_x.append(
+                    self.model.add_synapse_population(
+                        f"S_OUT_v_avg_x_{i}_{j}",
+                        "DENSE_INDIVIDUALG",
+                        NO_DELAY,
+                        self.S[-1],
+                        self.OUT[-1],
+                        create_cont_wu("cont_wu_v_avg_x", "vx"),
+                        {},
+                        self.S_OUT_avg_inivars,
+                        {},
+                        {},
+                        "DeltaCurr",
+                        {},
+                        {},
+                    )
+                )
+
+                self.S_OUT_v_avg_x[-1].ps_target_var = "Isyn_v_avg_x"
+
 
 def run_EMD_sim(
     evt_file,
@@ -490,7 +527,10 @@ def run_EMD_sim(
     measure_sim_speed=False,
     rec_neurons=[],
 ):
-    rec_neurons = list(set([("OUT", "V"), ("OUT", "V_linear"), ("OUT", "r_left"), ("OUT", "r_right")]) | set(rec_neurons))
+    rec_neurons = list(
+        set([("OUT", "V"), ("OUT", "V_linear"), ("OUT", "r_left"), ("OUT", "r_right")])
+        | set(rec_neurons)
+    )
 
     print("Running EMD simulation")
     p["REC_SPIKES"] = ["P", "S", "OUT"]
@@ -527,7 +567,7 @@ def run_EMD_sim(
     )
 
     if not measure_sim_speed:
-        #v_s = []
+        # v_s = []
         v_out = []
         v_out_linear = []
         r_left_out = []
@@ -536,7 +576,7 @@ def run_EMD_sim(
         sp_s = []
         sp_out = []
         for i in range(network.n_tiles_y):
-            #v_s.append([])
+            # v_s.append([])
             v_out.append([])
             v_out_linear.append([])
             r_left_out.append([])
@@ -545,12 +585,12 @@ def run_EMD_sim(
             sp_s.append([])
             sp_out.append([])
             for j in range(network.n_tiles_x):
-                #v_s[-1].append(
+                # v_s[-1].append(
                 #    np.reshape(
                 #        rec_vars_n[f"VS_{i}_{j}"],
                 #        (-1, network.S_height, network.S_width),
                 #    )
-                #)
+                # )
                 v_out[-1].append(rec_vars_n[f"VOUT_{i}_{j}"].flatten())
                 v_out_linear[-1].append(rec_vars_n[f"V_linearOUT_{i}_{j}"].flatten())
                 r_left_out[-1].append(rec_vars_n[f"r_leftOUT_{i}_{j}"].flatten())
@@ -595,7 +635,7 @@ def run_EMD_sim(
 
         np.savez(
             os.path.join(save_fold, results_filename),
-            #v_s=v_s,
+            # v_s=v_s,
             v_out=v_out,
             v_out_linear=v_out_linear,
             r_left_out=r_left_out,

@@ -109,6 +109,7 @@ out_neuron = genn_model.create_custom_neuron_class(
         "tau_m",
         "filt_scale",
         "filt_bias",
+        "sum_x_right_weights",
     ],
     derived_params=[
         (
@@ -116,11 +117,21 @@ out_neuron = genn_model.create_custom_neuron_class(
             genn_model.create_dpf_class(lambda pars, dt: np.exp(-dt / pars[2]))(),
         ),
     ],
-    var_name_types=[("r_right", "scalar"), ("r_left", "scalar"), ("V", "scalar"), ("V_linear", "scalar")],
+    var_name_types=[
+        ("r_right", "scalar"),
+        ("r_left", "scalar"),
+        ("v_avg_x", "scalar"),
+        ("V", "scalar"),
+        ("V_linear", "scalar"),
+    ],
     sim_code="""
     $(r_left) = $(Isyn_v_proj_left);
     $(r_right) = $(Isyn_v_proj_right); 
 
+    $(v_avg_x) = $(Isyn_v_avg_x);
+
+    $(r_left) += $(sum_x_right_weights) * $(v_avg_x);
+    $(r_right) -= $(sum_x_right_weights) * $(v_avg_x);
 
     const scalar filt_l = 1.0 / (1.0 + exp(-($(r_left) * $(filt_scale) - $(filt_bias))));
     const scalar filt_r = 1.0 / (1.0 + exp(-($(r_right) * $(filt_scale) - $(filt_bias))));
@@ -133,6 +144,7 @@ out_neuron = genn_model.create_custom_neuron_class(
     additional_input_vars=[
         ("Isyn_v_proj_left", "scalar", 0.0),
         ("Isyn_v_proj_right", "scalar", 0.0),
+        ("Isyn_v_avg_x", "scalar", 0.0),
     ],
 )
 
@@ -184,6 +196,10 @@ sparse_one_to_one_snippet_with_pad = genn_model.create_custom_sparse_connect_ini
     }
     $(endRow);
     """,
-    calc_max_row_len_func=genn_model.create_cmlf_class(lambda num_pre, num_post, pars: 1)(),
-    calc_max_col_len_func=genn_model.create_cmlf_class(lambda num_pre, num_post, pars: 1)(),
+    calc_max_row_len_func=genn_model.create_cmlf_class(
+        lambda num_pre, num_post, pars: 1
+    )(),
+    calc_max_col_len_func=genn_model.create_cmlf_class(
+        lambda num_pre, num_post, pars: 1
+    )(),
 )
