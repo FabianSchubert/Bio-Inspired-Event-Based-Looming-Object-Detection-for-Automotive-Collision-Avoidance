@@ -101,14 +101,8 @@ class EMD_model(Base_model):
         self.S_OUT_right_weights *= pos_weights
         # self.S_OUT_right_weights /= np.sum(self.S_OUT_right_weights)
 
-        self.sum_x_right_weights = (self.S_OUT_right_weights * xs).sum()
-
-        self.S_OUT_avg_weights = pos_weights.copy()
-        self.S_OUT_avg_weights /= np.sum(self.S_OUT_avg_weights)
-
         self.S_OUT_left_inivars = {"g": self.S_OUT_left_weights.flatten()}
         self.S_OUT_right_inivars = {"g": self.S_OUT_right_weights.flatten()}
-        self.S_OUT_avg_inivars = {"g": self.S_OUT_avg_weights.flatten()}
 
         self.S_params = {
             "v_reg": p["V_REG_S"],
@@ -123,7 +117,6 @@ class EMD_model(Base_model):
             # "tau_r": p["TAU_R_OUT"],
             "filt_scale": p["FILT_SCALE_OUT"],
             "filt_bias": p["FILT_BIAS_OUT"],
-            "sum_x_right_weights": self.sum_x_right_weights,
         }
 
         _out_vars = [v.name for v in out_neuron.get_vars()]
@@ -180,7 +173,6 @@ class EMD_model(Base_model):
 
         self.S_OUT_v_proj_left = []
         self.S_OUT_v_proj_right = []
-        self.S_OUT_v_avg_x = []
 
         for i in range(self.n_tiles_y):
             for j in range(self.n_tiles_x):
@@ -495,26 +487,6 @@ class EMD_model(Base_model):
                 )
 
                 self.S_OUT_v_proj_right[-1].ps_target_var = "Isyn_v_proj_right"
-
-                self.S_OUT_v_avg_x.append(
-                    self.model.add_synapse_population(
-                        f"S_OUT_v_avg_x_{i}_{j}",
-                        "DENSE_INDIVIDUALG",
-                        NO_DELAY,
-                        self.S[-1],
-                        self.OUT[-1],
-                        create_cont_wu("cont_wu_v_avg_x", "vx"),
-                        {},
-                        self.S_OUT_avg_inivars,
-                        {},
-                        {},
-                        "DeltaCurr",
-                        {},
-                        {},
-                    )
-                )
-
-                self.S_OUT_v_avg_x[-1].ps_target_var = "Isyn_v_avg_x"
 
 
 def run_EMD_sim(

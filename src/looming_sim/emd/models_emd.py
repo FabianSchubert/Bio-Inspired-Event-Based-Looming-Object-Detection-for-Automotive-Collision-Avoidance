@@ -109,7 +109,6 @@ out_neuron = genn_model.create_custom_neuron_class(
         "tau_m",
         "filt_scale",
         "filt_bias",
-        "sum_x_right_weights",
     ],
     derived_params=[
         (
@@ -120,18 +119,12 @@ out_neuron = genn_model.create_custom_neuron_class(
     var_name_types=[
         ("r_right", "scalar"),
         ("r_left", "scalar"),
-        ("v_avg_x", "scalar"),
         ("V", "scalar"),
         ("V_linear", "scalar"),
     ],
     sim_code="""
     $(r_left) = $(Isyn_v_proj_left);
-    $(r_right) = $(Isyn_v_proj_right); 
-
-    $(v_avg_x) = $(Isyn_v_avg_x);
-
-    $(r_left) += $(sum_x_right_weights) * $(v_avg_x);
-    $(r_right) -= $(sum_x_right_weights) * $(v_avg_x);
+    $(r_right) = $(Isyn_v_proj_right);
 
     const scalar filt_l = 1.0 / (1.0 + exp(-($(r_left) * $(filt_scale) - $(filt_bias))));
     const scalar filt_r = 1.0 / (1.0 + exp(-($(r_right) * $(filt_scale) - $(filt_bias))));
@@ -144,7 +137,6 @@ out_neuron = genn_model.create_custom_neuron_class(
     additional_input_vars=[
         ("Isyn_v_proj_left", "scalar", 0.0),
         ("Isyn_v_proj_right", "scalar", 0.0),
-        ("Isyn_v_avg_x", "scalar", 0.0),
     ],
 )
 
