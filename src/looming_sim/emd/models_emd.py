@@ -2,32 +2,6 @@ from pygenn import genn_model
 
 import numpy as np
 
-'''
-p_neuron = genn_model.create_custom_neuron_class(
-    "P",
-    param_names=["tau_m", "tau_i", "th"],
-    derived_params=[
-        (
-            "alpha_m",
-            genn_model.create_dpf_class(lambda pars, dt: np.exp(-dt / pars[0]))(),
-        ),
-        (
-            "alpha_i",
-            genn_model.create_dpf_class(lambda pars, dt: np.exp(-dt / pars[1]))(),
-        )
-    ],
-    var_name_types=[("V", "scalar"), ("I", "scalar")],
-    sim_code="""
-    $(I) = $(alpha_i) * $(I) + (1.0 - $(alpha_i)) * $(Isyn);
-    $(V) = $(alpha_m) * $(V) + (1.0 - $(alpha_m)) * $(I);
-    """,
-    threshold_condition_code="""
-    $(V) > $(th)
-    """,
-    reset_code="$(V) = 0.0;",
-    is_auto_refractory_required=False,
-)
-'''
 p_neuron = genn_model.create_custom_neuron_class(
     "P",
     param_names=[],
