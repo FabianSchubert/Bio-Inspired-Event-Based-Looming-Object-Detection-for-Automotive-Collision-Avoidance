@@ -1,5 +1,6 @@
 import numpy as np
 import os
+import shutil
 import sys
 
 from tqdm import tqdm
@@ -16,9 +17,36 @@ WIDTH, HEIGHT = 640, 480
 
 for sample in tqdm(samples):
 
-    events = np.load(os.path.join(base_fold_input_data, sample, "events.npy"))
+    events = np.load(
+        os.path.join(
+            base_fold_input_data,
+            sample,
+            "events.npy",
+        )
+    )
 
-    t_end_ms = 0 if len(events)==0 else events["t"][-1]
+    noisy_fold = os.path.join(
+        base_fold_input_data_noisy,
+        f"noise_level_{str(NOISE_RATE_PER_SEC_PER_PX).replace('.','_')}",
+        sample,
+    )
+
+    if not os.path.exists(noisy_fold):
+        os.makedirs(noisy_fold)
+
+    shutil.copyfile(
+        os.path.join(
+            base_fold_input_data,
+            sample,
+            "sim_data.npz",
+        ),
+        os.path.join(
+            noisy_fold,
+            "sim_data.npz",
+        ),
+    )
+
+    t_end_ms = 0 if len(events) == 0 else events["t"][-1]
 
     n_noise_events = int(t_end_ms * NOISE_RATE_PER_SEC_PER_PX * WIDTH * HEIGHT / 1000)
 
@@ -27,7 +55,9 @@ for sample in tqdm(samples):
     y_noise = np.random.randint(0, HEIGHT, n_noise_events)
     p_noise = np.random.randint(0, 2, n_noise_events)
 
-    noise_events = np.array(list(zip(t_noise, x_noise, y_noise, p_noise)), dtype=EVENTS_DTYPE)
+    noise_events = np.array(
+        list(zip(t_noise, x_noise, y_noise, p_noise)), dtype=EVENTS_DTYPE
+    )
 
     events_comb = np.append(events, noise_events)
 
@@ -35,10 +65,4 @@ for sample in tqdm(samples):
 
     events_comb = events_comb[idx_sort]
 
-    noisy_fold = os.path.join(base_fold_input_data_noisy, sample)
-
-    if not os.path.exists(noisy_fold):
-        os.makedirs(noisy_fold)
-
     np.save(os.path.join(noisy_fold, "events.npy"), events_comb)
-

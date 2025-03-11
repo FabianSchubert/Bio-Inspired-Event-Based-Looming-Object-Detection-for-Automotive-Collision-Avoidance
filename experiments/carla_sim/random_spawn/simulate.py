@@ -1,5 +1,5 @@
 import os
-
+import sys
 import numpy as np
 
 # from src.looming_sim.lgmd.simulator_LGMD import run_LGMD_sim
@@ -11,11 +11,9 @@ from src.looming_sim.emd.network_settings import params as params_emd
 from .settings import (
     base_fold_results,
     base_fold_input_data,
-    base_fold_input_data_noisy,
-    base_fold_results_noisy,
 )
 
-DATA_TYPE = ["noisy"]
+NOISE_RATE = float(sys.argv[1])
 
 run_sim = {"EMD": run_EMD_sim}
 
@@ -24,6 +22,7 @@ params_emd = params_emd.copy()
 
 # params_lgmd["DT_MS"] = 10.0
 params_emd["DT_MS"] = 10.0
+params_emd["NOISE_RATE"] = NOISE_RATE / 1000. # convert to per millisecond
 
 params = {"EMD": params_emd}
 
@@ -42,28 +41,24 @@ examples = list(samples_pytorch["test"])
 # use all other samples.
 # examples = [ex for ex in os.listdir(base_fold_input_data) if ex not in exclude_examples]
 
-for data_type in DATA_TYPE:
-    if data_type == "noisy":
-        bf = base_fold_input_data_noisy
-        bf_r = base_fold_results_noisy
-    else:
-        bf = base_fold_input_data
-        bf_r = base_fold_results
+for ex in examples:
+    evt_file = os.path.join(base_fold_input_data, ex, "events.npy")
+    for sim_name, sim in run_sim.items():
+        for n_subd in n_subdiv:
 
-    for ex in examples:
-        evt_file = os.path.join(bf, ex, "events.npy")
-        for sim_name, sim in run_sim.items():
-            for n_subd in n_subdiv:
-                results_fold = os.path.join(
-                    bf_r, sim_name, str(n_subd * 2 - 1) + "_tiles"
-                )
+            results_fold = os.path.join(
+                base_fold_results,
+                sim_name,
+                str(n_subd * 2 - 1) + "_tiles",
+                f"noise_level_{str(NOISE_RATE).replace('.','_')}",
+            )
 
-                sim(
-                    evt_file,
-                    results_fold,
-                    results_filename=ex + ".npz",
-                    custom_params={"N_SUBDIV_X": n_subd, "N_SUBDIV_Y": n_subd},
-                    measure_sim_speed=False,
-                    p=params[sim_name],
-                )
-        sim = None
+            sim(
+                evt_file,
+                results_fold,
+                results_filename=ex + ".npz",
+                custom_params={"N_SUBDIV_X": n_subd, "N_SUBDIV_Y": n_subd},
+                measure_sim_speed=False,
+                p=params[sim_name],
+            )
+    sim = None

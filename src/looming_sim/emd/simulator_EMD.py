@@ -42,7 +42,7 @@ class EMD_model(Base_model):
         self.N_inivars = dict(zip(_n_vars, [0.0] * len(_n_vars)))
 
         # input current sources (spike source array of DVS events)
-        input_params = {"unit_amplitude": 1.0}
+        input_params = {"unit_amplitude": 1.0, "noise_rate": p["NOISE_RATE"]}  # noise rate per millisecond
 
         self.input_inivars = {"nt": self.nt_max, "pop_size": self.n_input}
 
