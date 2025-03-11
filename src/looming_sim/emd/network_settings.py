@@ -27,6 +27,7 @@ params = {
     "N_SUBDIV_Y": 2,
     "HALF_STEP_TILES": True,
     "SPK_REC_STEPS": 100,
+    "NOISE_RATE": 0.0, # poisson event noise rate per pixel per millisecond, for positive and negative events
     #
     "NORM_KERNEL": kernel_norm,
     "X_KERNEL": kernel_x,

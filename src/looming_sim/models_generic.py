@@ -19,7 +19,7 @@ spike_array_current_source = genn_model.create_custom_current_source_class(
 
 bitmask_array_current_source = genn_model.create_custom_current_source_class(
     "",
-    param_names=["unit_amplitude"],
+    param_names=["unit_amplitude", "noise_rate"],
     var_name_types=[("nt", "int"), ("pop_size", "int")],
     extra_global_params=[
         ("spikeBitmask", "uint32_t*"),
@@ -37,6 +37,10 @@ bitmask_array_current_source = genn_model.create_custom_current_source_class(
         $(injectCurrent,
             $(unit_amplitude)*(pol * 2.0 - 1.0)
         );
+    } else {
+        if ($(gennrand_uniform) < $(noise_rate) * DT) {
+            $(injectCurrent, $(unit_amplitude)*($(gennrand_binomial, 1, 0.5)*2.0-1.0));
+        }
     }
     """,
 )
