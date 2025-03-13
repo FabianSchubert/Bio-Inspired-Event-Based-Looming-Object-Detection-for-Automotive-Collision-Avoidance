@@ -19,7 +19,7 @@ The metadata is stored in a sim_data.npz file, which consists of
 
 `["coll_type", "t_end", "dt", "vel", "diameter_object"]`.
 
-- coll_type: string describing the type of collision. Event types are: `["pedestrians", "cars", "none", "none_with_traffic"]`.
+- coll_type: string describing the type of collision. Event types are: `["pedestrians", "cars", "none", "none_with_traffic", "none_with_crossing"]`.
 - t_end: end time of the sequence in milliseconds. If the sequence has a collision, it ends with it, so this also marks the collision time.
 - dt: time step in milliseconds.
 - vel: the average velocity of the collision object relative to the camera (forward, i.e. z-axis projected) in meters / sec. If no collision occurs it is `np.nan`.
