@@ -3,6 +3,19 @@ import torch.nn as nn
 
 import numpy as np
 
+from .network_settings import (
+    KERN_HALF_SIZE,
+    SIGM_KERNEL,
+    R_OUT_SIGM_SCALE_INIT,
+    R_OUT_SCALE_INIT,
+    TRAIN_WEIGHTS,
+    USE_DROPOUT,
+    TRAIN_KERNELS,
+    DT,
+    REG,
+    RMO_HEAD,
+)
+
 
 class SigmoidScaleBias(nn.Module):
     def __init__(self, dim, scale=True, bias=True, single_param=False):
@@ -38,26 +51,23 @@ class LoomingDetector(nn.Module):
         self,
         width=320,
         height=240,
-        kern_half_size=3,
-        rmo_head=True,
-        sigm_kern=0.3,
-        reg=1.5,
-        dt=10.0,
-        r_out_sigm_scale=500.0,
-        r_out_scale=500.0,
-        train_weights=True,
-        size_layers=[10],
-        use_dropout=False,
-        train_kernels=False,
+        kern_half_size=KERN_HALF_SIZE,
+        rmo_head=RMO_HEAD,
+        sigm_kern=SIGM_KERNEL,
+        reg=REG,
+        dt=DT,
+        r_out_sigm_scale=R_OUT_SIGM_SCALE_INIT,
+        r_out_scale=R_OUT_SCALE_INIT,
+        train_weights=TRAIN_WEIGHTS,
+        use_dropout=USE_DROPOUT,
+        train_kernels=TRAIN_KERNELS,
     ):
         super().__init__()
 
         self.width = width
         self.height = height
         self.kern_half_size = kern_half_size
-        self.size_layers = (
-            size_layers if isinstance(size_layers, list) else [size_layers]
-        )
+
         self.kern_size = 2 * kern_half_size + 1
 
         self.sigm_kern = sigm_kern
@@ -153,7 +163,7 @@ class LoomingDetector(nn.Module):
         self.sigm = SigmoidScaleBias(2, single_param=True)
 
         with torch.no_grad():
-            self.sigm.scale = nn.Parameter(torch.tensor([r_out_sigm_scale]).float())
+            self.sigm.scale[:] = r_out_sigm_scale
 
         self.out_scale = nn.Parameter(torch.tensor([r_out_scale]).float())
 
@@ -178,13 +188,13 @@ class LoomingDetector(nn.Module):
             -x_p[..., 1:2, :, :]
             * I_x_p_prev
             * self.dt
-            / (self.reg**2 + I_norm_p_prev * self.dt**2)
+            / (self.reg + I_norm_p_prev * self.dt**2)
         )
         vy_p = (
             -x_p[..., 1:2, :, :]
             * I_y_p_prev
             * self.dt
-            / (self.reg**2 + I_norm_p_prev * self.dt**2)
+            / (self.reg + I_norm_p_prev * self.dt**2)
         )
 
         I_x_n_prev = self.kern_x(x_n[..., 0:1, :, :])
@@ -195,13 +205,13 @@ class LoomingDetector(nn.Module):
             -x_n[..., 1:2, :, :]
             * I_x_n_prev
             * self.dt
-            / (self.reg**2 + I_norm_n_prev * self.dt**2)
+            / (self.reg + I_norm_n_prev * self.dt**2)
         )
         vy_n = (
             -x_n[..., 1:2, :, :]
             * I_y_n_prev
             * self.dt
-            / (self.reg**2 + I_norm_n_prev * self.dt**2)
+            / (self.reg + I_norm_n_prev * self.dt**2)
         )
 
         self.vx = vx_p + vx_n

@@ -2,6 +2,8 @@ import os
 import sys
 import numpy as np
 
+from pathlib import Path
+
 # from src.looming_sim.lgmd.simulator_LGMD import run_LGMD_sim
 from src.looming_sim.emd.simulator_EMD import run_EMD_sim
 
@@ -13,6 +15,11 @@ from .settings import (
     base_fold_input_data,
 )
 
+# load trained hyperparameters
+HYPERPARAMS = np.load(
+    Path(base_fold_results).resolve() / "hyperparams.npz", allow_pickle=True
+)
+
 NOISE_RATE = float(sys.argv[1])
 
 run_sim = {"EMD": run_EMD_sim}
@@ -22,16 +29,18 @@ params_emd = params_emd.copy()
 
 # params_lgmd["DT_MS"] = 10.0
 params_emd["DT_MS"] = 10.0
-params_emd["NOISE_RATE"] = NOISE_RATE / 1000. # convert to per millisecond
+params_emd["NOISE_RATE"] = NOISE_RATE / 1000.0  # convert to per millisecond
+
+# set hyperparameters
+params_emd["OUTPUT_SCALE"] = float(HYPERPARAMS["out_scale"][()])
+params_emd["FILT_SCALE_OUT"] = float(HYPERPARAMS["sigm_scale"][()])
+params_emd["FILT_BIAS_OUT"] = float(HYPERPARAMS["sigm_bias"][()])
 
 params = {"EMD": params_emd}
 
 n_subdiv = [2]
 
 examples = os.listdir(base_fold_input_data)
-
-# use all other samples.
-# examples = [ex for ex in os.listdir(base_fold_input_data) if ex not in exclude_examples]
 
 for ex in examples:
     evt_file = os.path.join(base_fold_input_data, ex, "events.npy")

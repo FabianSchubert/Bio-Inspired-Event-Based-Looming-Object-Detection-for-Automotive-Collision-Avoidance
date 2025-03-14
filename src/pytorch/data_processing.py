@@ -57,7 +57,7 @@ def load_raw_data(samples: list[Path]):
     mem_gb = 0
 
     for sample in samples:
-        
+
         # in case it is a string
         sample = Path(sample)
 
@@ -146,3 +146,18 @@ def convert_to_tens(
     metadata = [metadata[i] for i in range(len(metadata)) if i not in idx_drop]
 
     return X, labels, metadata
+
+
+def gen_x_sequ(X, Y, t_steps_to_coll_max=None):
+    _t_steps = X.shape[1]
+    X_1 = X[:, 1:, ...]
+    X_0 = X[:, :-1, ...]
+    X_seq = torch.stack([X_0, X_1], dim=2)
+    X_seq = X_seq.view(-1, X_seq.shape[-3], X_seq.shape[-2], X_seq.shape[-1])
+
+    Y_expand = Y.unsqueeze(1).repeat(1, _t_steps - 1)  # .flatten()
+    if t_steps_to_coll_max is not None:
+        Y_expand[:, :-t_steps_to_coll_max] = 0
+    Y_expand = Y_expand.flatten()
+
+    return X_seq, Y_expand
