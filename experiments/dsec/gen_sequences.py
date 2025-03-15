@@ -3,6 +3,10 @@ import h5py
 import hdf5plugin  # need to import this to prevent error when loading h5py files
 import os
 
+from numba import jit, uint32, uint16
+
+# ("t", "<u4"), ("x", "<u2"), ("y", "<u2"), ("p", "<u2")]
+
 from .settings import base_fold_raw_data, base_fold_input_data
 
 from src.config import EVENTS_DTYPE
@@ -26,6 +30,73 @@ METADATA = {
     "vel": VELOCITY,
     "diameter_object": DIAMETER_OBJECT,
 }
+
+
+# use numba jit, otherwise this is way too slow
+@jit(nopython=True)
+def downsample_events(
+    t,
+    x,
+    y,
+    p,
+    dt_ms=DT_MS,
+    width=640,
+    height=480,
+    threshold=1,  # deviation from zero of sum of polarities required in dt_ms to trigger a downsampled event
+):
+    # (assumes t is already in milliseconds!)
+
+    assert threshold > 0, "Threshold must be greater than 0"
+
+    x_new = np.zeros_like(x)
+    y_new = np.zeros_like(y)
+    t_new = np.zeros_like(t)
+    p_new = np.zeros_like(p)
+
+    n_events = 0
+
+    # 32 bit int might be a bit overkill for keeping track of the sum of polarities within the time window,
+    # but 16 bit int might be too small
+    sum_tmp = np.zeros((height * width), dtype=np.int32)
+    # occupied = np.zeros((height * width), dtype=np.int32)
+
+    t_ds = ((t // dt_ms) * dt_ms).astype(np.uint32)
+
+    # not necessary if t is already sorted
+    # sortidx = np.argsort(t_ds)
+    # t_ds = t_ds[sortidx]
+    # x = x[sortidx]
+    # y = y[sortidx]
+    # p = p[sortidx]
+
+    _t = t_ds[0]
+
+    for i in range(len(t_ds)):
+
+        if t_ds[i] != _t:
+            idx = np.where(np.abs(sum_tmp) >= threshold)[0]
+            # idx = np.where(occupied)[0]
+            x_new[n_events : n_events + len(idx)] = (idx % width).astype(np.uint16)
+            y_new[n_events : n_events + len(idx)] = (idx // width).astype(np.uint16)
+            t_new[n_events : n_events + len(idx)] = _t
+            p_new[n_events : n_events + len(idx)] = (sum_tmp[idx] > 0).astype(np.uint16)
+            # p_new[n_events : n_events + len(idx)] = (occupied[idx] > 0).astype(np.uint16)
+            n_events += len(idx)
+            sum_tmp = np.zeros((height * width), dtype=np.int32)
+            # occupied = np.zeros((height * width), dtype=np.int32)
+            _t = t_ds[i]
+
+        # if occupied[int(y[i]) * width + int(x[i])] == 0:
+        # occupied[int(y[i]) * width + int(x[i])] = int(p[i]) * 2 - 1
+
+        sum_tmp[int(y[i]) * width + int(x[i])] += int(p[i]) * 2 - 1
+
+    t_new = t_new[:n_events].copy()
+    x_new = x_new[:n_events].copy()
+    y_new = y_new[:n_events].copy()
+    p_new = p_new[:n_events].copy()
+
+    return t_new, x_new, y_new, p_new
 
 
 def gen_sequences(downsample=False):
@@ -99,19 +170,33 @@ def gen_sequences(downsample=False):
         n_before = len(_t)
 
         if downsample:
+            _t, _x, _y, _p = downsample_events(_t, _x, _y, _p, threshold=2)
+            n_after = len(_t)
             # downsample to DT_MS
-            _t = ((_t // DT_MS) * DT_MS).astype(np.uint32)
+            # _t = ((_t // DT_MS) * DT_MS).astype(np.uint32)
             # calculate a unique id for each event
-            _unique_id = _t * 640 * 480 + _y * 640 + _x
+            # _unique_id = _t * 640 * 480 * 2 + _y * 640 * 2 + _x * 2 + _p
             # find unique events. This returns the index of the *first* appearance of each unique event,
             # which, in this case, would be the first event in a given millisecond at a given location (ignoring polarity).
-            _, idx = np.unique(_unique_id, return_index=True)
-            _x = _x[idx]
-            _y = _y[idx]
-            _t = _t[idx]
-            _p = _p[idx]
+            # _, idx = np.unique(_unique_id, return_index=True)
+            # _x_unique = _x[idx]
+            # _y_unique = _y[idx]
+            # _t_unique = _t[idx]
+            # _p_unique = _p[idx]
 
-            n_after = len(_t)
+            # n_after = len(_t_unique)
+            # import matplotlib.pyplot as plt
+            # plt.ion()
+            # plt.figure()
+            # plt.plot(_x_ds[:100000], _y_ds[:100000], ".", markersize=1)
+            # plt.gca().invert_yaxis()
+            # plt.gca().set_aspect("equal")
+
+            # plt.figure()
+            # plt.plot(_x_unique[:100000], _y_unique[:100000], ".", markersize=1)
+            # plt.gca().invert_yaxis()
+            # plt.gca().set_aspect("equal")
+
             print(f"Downsampled from {n_before} to {n_after} events")
 
         # construct a structurred array events

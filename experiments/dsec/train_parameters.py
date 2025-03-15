@@ -356,7 +356,7 @@ def test_model(test_loader):
 
 
 if __name__ == "__main__":
-    gen_datasets(gen_metadata=False, gen_training=False, gen_test=False)
+    gen_datasets(gen_metadata=True, gen_training=True, gen_test=True)
     train_loader, val_loader, test_loader, md_train, md_val, md_test = gen_data_loaders()
     train_model(train_loader, val_loader)
     test_model(test_loader)
