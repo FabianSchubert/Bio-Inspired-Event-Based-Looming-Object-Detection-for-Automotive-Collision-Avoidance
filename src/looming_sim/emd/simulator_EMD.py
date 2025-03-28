@@ -498,6 +498,7 @@ def run_EMD_sim(
     custom_params={},
     measure_sim_speed=False,
     rec_neurons=[],
+    rec_dt=10.0,
 ):
     rec_neurons = list(
         set([("OUT", "V"), ("OUT", "V_linear"), ("OUT", "r_left"), ("OUT", "r_right")])
@@ -528,7 +529,7 @@ def run_EMD_sim(
     if measure_sim_speed:
         rec_neurons = []
 
-    rec_dt = 10.0
+    rec_dt = np.maximum(rec_dt, p["DT_MS"])
 
     spike_t, spike_ID, rec_vars_n, rec_n_t, rec_vars_s, rec_s_t = network.run_model(
         0.0,
@@ -576,7 +577,7 @@ def run_EMD_sim(
                         network.tile_height,
                     )
                 )
-                sp_p[-1].append(
+                sp_s[-1].append(
                     convert_spk_id_to_evt_array(
                         spike_ID[f"S_{i}_{j}"],
                         spike_t[f"S_{i}_{j}"],
